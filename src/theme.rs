@@ -95,7 +95,7 @@ pub const ALL_THEMES: &[(&str, Theme)] = &[
 ];
 
 pub fn default_theme() -> Theme {
-    ALL_THEMES[0].1
+    ALL_THEMES[5].1
 }
 
 #[allow(dead_code)]

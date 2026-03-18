@@ -17,7 +17,7 @@ impl AppState {
             file_path,
             scroll: 0,
             theme: default_theme(),
-            theme_index: 0,
+            theme_index: 5,
         }
     }
 
