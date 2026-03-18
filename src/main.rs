@@ -22,7 +22,6 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use state::{AppMode, AppState};
-use theme;
 
 fn setup_watcher(path: &PathBuf, flag: Arc<AtomicBool>) -> Option<RecommendedWatcher> {
     let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
