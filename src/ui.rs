@@ -55,37 +55,13 @@ fn draw_browser(f: &mut Frame, state: &AppState) {
     f.render_widget(outer_block, area);
 
     let chunks = Layout::vertical([
-        Constraint::Length(1), // title bar
-        Constraint::Length(1), // separator
         Constraint::Min(1),   // file list
         Constraint::Length(1), // status bar
     ])
     .split(inner);
 
-    // Title bar
-    let dir_display = shorten_path(&state.browser.current_dir.display().to_string());
-    let title = Line::from(vec![
-        Span::styled(
-            "meld",
-            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(" │ ", Style::default().fg(theme.border)),
-        Span::styled(dir_display, Style::default().fg(theme.text)),
-    ]);
-    f.render_widget(Paragraph::new(title), chunks[0]);
-
-    // Separator
-    let sep = "─".repeat(chunks[1].width as usize);
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            sep,
-            Style::default().fg(theme.border),
-        ))),
-        chunks[1],
-    );
-
     // File list
-    let content_area = chunks[2];
+    let content_area = chunks[0];
     let visible_height = content_area.height as usize;
 
     let entries = &state.browser.entries;
@@ -140,13 +116,21 @@ fn draw_browser(f: &mut Frame, state: &AppState) {
     }
 
     // Status bar
+    let dir_display = shorten_path(&state.browser.current_dir.display().to_string());
     let status = Line::from(vec![
         Span::styled(
-            " ?:help",
+            "meld",
+            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" │ ", Style::default().fg(theme.border)),
+        Span::styled(dir_display, Style::default().fg(theme.text)),
+        Span::styled(" │ ", Style::default().fg(theme.border)),
+        Span::styled(
+            "?:help",
             Style::default().fg(theme.text_muted),
         ),
     ]);
-    f.render_widget(Paragraph::new(status), chunks[3]);
+    f.render_widget(Paragraph::new(status), chunks[1]);
 }
 
 fn draw_reader(f: &mut Frame, state: &mut AppState) {
@@ -162,42 +146,13 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
     f.render_widget(outer_block, area);
 
     let chunks = Layout::vertical([
-        Constraint::Length(1), // title bar
-        Constraint::Length(1), // separator
         Constraint::Min(1),   // content
         Constraint::Length(1), // status bar
     ])
     .split(inner);
 
-    // Title bar
-    let filename = state
-        .file_path
-        .as_ref()
-        .map(|p| shorten_path(&p.display().to_string()))
-        .unwrap_or_else(|| "no file".to_string());
-
-    let title = Line::from(vec![
-        Span::styled(
-            "meld",
-            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(" │ ", Style::default().fg(theme.border)),
-        Span::styled(filename, Style::default().fg(theme.text)),
-    ]);
-    f.render_widget(Paragraph::new(title), chunks[0]);
-
-    // Separator
-    let sep = "─".repeat(chunks[1].width as usize);
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            sep,
-            Style::default().fg(theme.border),
-        ))),
-        chunks[1],
-    );
-
     // Content area
-    let content_area = chunks[2];
+    let content_area = chunks[0];
     let styled_lines = parse_markdown(&state.content, theme, content_area.width);
     let total_lines = styled_lines.len();
     let visible_height = content_area.height as usize;
@@ -223,6 +178,12 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
     f.render_widget(Paragraph::new(visible), content_area);
 
     // Status bar
+    let filename = state
+        .file_path
+        .as_ref()
+        .map(|p| shorten_path(&p.display().to_string()))
+        .unwrap_or_else(|| "no file".to_string());
+
     let is_searching = matches!(state.mode, AppMode::Search);
 
     if is_searching {
@@ -244,7 +205,7 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
             ),
             Span::styled(match_info, Style::default().fg(theme.text_dim)),
         ]);
-        f.render_widget(Paragraph::new(status), chunks[3]);
+        f.render_widget(Paragraph::new(status), chunks[1]);
     } else {
         let scroll_pct = if total_lines <= visible_height {
             100
@@ -254,7 +215,14 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
 
         let mut status_spans = vec![
             Span::styled(
-                format!(" {}%", scroll_pct),
+                "meld",
+                Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" │ ", Style::default().fg(theme.border)),
+            Span::styled(filename, Style::default().fg(theme.text)),
+            Span::styled(" │ ", Style::default().fg(theme.border)),
+            Span::styled(
+                format!("{}%", scroll_pct),
                 Style::default().fg(theme.text_dim),
             ),
             Span::styled(" │ ", Style::default().fg(theme.border)),
@@ -274,7 +242,7 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
             status_spans.push(Span::styled(match_info, Style::default().fg(theme.text_dim)));
         }
 
-        f.render_widget(Paragraph::new(Line::from(status_spans)), chunks[3]);
+        f.render_widget(Paragraph::new(Line::from(status_spans)), chunks[1]);
     }
 }
 
