@@ -1,6 +1,7 @@
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
+use unicode_width::UnicodeWidthStr;
 
 use crate::theme::Theme;
 
@@ -21,6 +22,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
 
     let mut bold = false;
     let mut italic = false;
+    let mut strikethrough = false;
     let mut in_heading: Option<u8> = None;
     let mut in_code_block = false;
     let mut in_blockquote = false;
@@ -28,6 +30,9 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
     let mut list_number: Option<u64> = None;
     let mut list_item_first_para = false;
     let mut list_indent: usize = 0;
+    let mut in_table = false;
+    let mut table_row: Vec<String> = Vec::new();
+    let mut table_alignments: Vec<pulldown_cmark::Alignment> = Vec::new();
 
     for event in parser {
         match event {
@@ -53,6 +58,14 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                 }
                 Tag::Emphasis => italic = true,
                 Tag::Strong => bold = true,
+                Tag::Strikethrough => strikethrough = true,
+                Tag::Table(alignments) => {
+                    in_table = true;
+                    table_alignments = alignments;
+                }
+                Tag::TableHead => {}
+                Tag::TableRow => {}
+                Tag::TableCell => {}
                 _ => {}
             },
             Event::End(tag_end) => match tag_end {
@@ -84,10 +97,45 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                 }
                 TagEnd::Emphasis => italic = false,
                 TagEnd::Strong => bold = false,
+                TagEnd::Strikethrough => strikethrough = false,
+                TagEnd::Table => {
+                    in_table = false;
+                    table_alignments.clear();
+                    push_blank(&mut lines);
+                }
+                TagEnd::TableHead => {
+                    // Emit header row
+                    emit_table_row(&mut lines, &table_row, &table_alignments, theme, true, width);
+                    table_row.clear();
+                    // Emit separator
+                    let sep = table_alignments
+                        .iter()
+                        .map(|_| "───────")
+                        .collect::<Vec<_>>()
+                        .join("─┼─");
+                    lines.push(StyledLine {
+                        line: Line::from(Span::styled(
+                            format!("  {}",sep),
+                            Style::default().fg(theme.border),
+                        )),
+                        is_blank: false,
+                    });
+                }
+                TagEnd::TableRow => {
+                    emit_table_row(&mut lines, &table_row, &table_alignments, theme, false, width);
+                    table_row.clear();
+                }
+                TagEnd::TableCell => {}
                 _ => {}
             },
             Event::Text(text) => {
                 let text = text.into_string();
+
+                if in_table {
+                    table_row.push(text);
+                    continue;
+                }
+
                 let style = if let Some(level) = in_heading {
                     let color = match level {
                         1 => theme.accent,
@@ -104,6 +152,9 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                     }
                     if italic {
                         s = s.add_modifier(Modifier::ITALIC);
+                    }
+                    if strikethrough {
+                        s = s.add_modifier(Modifier::CROSSED_OUT);
                     }
                     s
                 };
@@ -143,7 +194,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                         } else {
                             "  • ".to_string()
                         };
-                        list_indent = bullet.len();
+                        list_indent = bullet.width();
                         current_spans.push(Span::styled(
                             bullet,
                             Style::default().fg(theme.accent),
@@ -157,14 +208,14 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                     let mut line_len = current_line_len(&current_spans);
 
                     for word in words {
-                        let wlen = word.len();
+                        let wlen = word.width();
                         if line_len > 0 && line_len + 1 + wlen > max_width {
                             flush_line(&mut lines, &mut current_spans);
                             // Add continuation indent for list items
                             if in_list_item && list_indent > 0 {
                                 let indent = " ".repeat(list_indent);
                                 current_spans.push(Span::raw(indent.clone()));
-                                line_len = indent.len();
+                                line_len = list_indent;
                             } else {
                                 line_len = 0;
                             }
@@ -191,7 +242,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                     } else {
                         "  • ".to_string()
                     };
-                    list_indent = bullet.len();
+                    list_indent = bullet.width();
                     current_spans.push(Span::styled(
                         bullet,
                         Style::default().fg(theme.accent),
@@ -203,7 +254,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
             }
             Event::TaskListMarker(checked) => {
                 let marker = if checked { "  [x] " } else { "  [ ] " };
-                list_indent = marker.len();
+                list_indent = marker.width();
                 current_spans.push(Span::styled(
                     marker.to_string(),
                     Style::default().fg(theme.accent),
@@ -239,8 +290,50 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
     lines
 }
 
+fn emit_table_row(
+    lines: &mut Vec<StyledLine<'static>>,
+    cells: &[String],
+    alignments: &[pulldown_cmark::Alignment],
+    theme: Theme,
+    is_header: bool,
+    _width: u16,
+) {
+    let col_width = 15;
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    spans.push(Span::styled("  ".to_string(), Style::default()));
+
+    for (i, cell) in cells.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" │ ", Style::default().fg(theme.border)));
+        }
+
+        let alignment = alignments.get(i).copied().unwrap_or(pulldown_cmark::Alignment::None);
+        let text = if cell.len() > col_width {
+            format!("{}…", &cell[..col_width - 1])
+        } else {
+            match alignment {
+                pulldown_cmark::Alignment::Right => format!("{:>width$}", cell, width = col_width),
+                pulldown_cmark::Alignment::Center => format!("{:^width$}", cell, width = col_width),
+                _ => format!("{:<width$}", cell, width = col_width),
+            }
+        };
+
+        let style = if is_header {
+            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme.text)
+        };
+        spans.push(Span::styled(text, style));
+    }
+
+    lines.push(StyledLine {
+        line: Line::from(spans),
+        is_blank: false,
+    });
+}
+
 fn current_line_len(spans: &[Span]) -> usize {
-    spans.iter().map(|s| s.content.len()).sum()
+    spans.iter().map(|s| s.content.width()).sum()
 }
 
 fn push_blank(lines: &mut Vec<StyledLine<'static>>) {

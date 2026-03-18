@@ -8,12 +8,22 @@ use crate::markdown::parse_markdown;
 use crate::state::{AppMode, AppState};
 use crate::theme::ALL_THEMES;
 
-pub fn draw(f: &mut Frame, state: &AppState) {
+fn shorten_path(path: &str) -> String {
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = home.to_string_lossy();
+        if let Some(rest) = path.strip_prefix(home.as_ref()) {
+            return format!("~{}", rest);
+        }
+    }
+    path.to_string()
+}
+
+pub fn draw(f: &mut Frame, state: &mut AppState) {
     match state.mode {
         AppMode::Browser => draw_browser(f, state),
         AppMode::Reader => draw_reader(f, state),
+        AppMode::Search => draw_reader(f, state),
         AppMode::ThemePicker { .. } => {
-            // Draw the underlying mode first, then overlay
             if let AppMode::ThemePicker { previous_mode, .. } = state.mode {
                 match previous_mode {
                     crate::state::PreviousMode::Browser => draw_browser(f, state),
@@ -53,7 +63,7 @@ fn draw_browser(f: &mut Frame, state: &AppState) {
     .split(inner);
 
     // Title bar
-    let dir_display = state.browser.current_dir.display().to_string();
+    let dir_display = shorten_path(&state.browser.current_dir.display().to_string());
     let title = Line::from(vec![
         Span::styled(
             "meld",
@@ -149,7 +159,7 @@ fn draw_browser(f: &mut Frame, state: &AppState) {
     f.render_widget(Paragraph::new(status), chunks[3]);
 }
 
-fn draw_reader(f: &mut Frame, state: &AppState) {
+fn draw_reader(f: &mut Frame, state: &mut AppState) {
     let area = f.area();
     let theme = state.theme;
 
@@ -173,7 +183,7 @@ fn draw_reader(f: &mut Frame, state: &AppState) {
     let filename = state
         .file_path
         .as_ref()
-        .map(|p| p.display().to_string())
+        .map(|p| shorten_path(&p.display().to_string()))
         .unwrap_or_else(|| "no file".to_string());
 
     let title = Line::from(vec![
@@ -200,48 +210,138 @@ fn draw_reader(f: &mut Frame, state: &AppState) {
     let content_area = chunks[2];
     let styled_lines = parse_markdown(&state.content, theme, content_area.width);
     let total_lines = styled_lines.len();
-
     let visible_height = content_area.height as usize;
+
+    state.total_lines = total_lines;
+    state.visible_height = visible_height;
+
     let scroll = state.scroll.min(total_lines.saturating_sub(visible_height));
 
     let visible: Vec<Line> = styled_lines
         .into_iter()
         .skip(scroll)
         .take(visible_height)
-        .map(|sl| sl.line)
+        .map(|sl| {
+            if state.search_query.is_empty() {
+                sl.line
+            } else {
+                highlight_search(sl.line, &state.search_query, theme)
+            }
+        })
         .collect();
 
     f.render_widget(Paragraph::new(visible), content_area);
 
     // Status bar
-    let theme_name = ALL_THEMES
-        .get(state.theme_index)
-        .map(|(name, _)| *name)
-        .unwrap_or("unknown");
+    let is_searching = matches!(state.mode, AppMode::Search);
 
-    let scroll_pct = if total_lines <= visible_height {
-        100
+    if is_searching {
+        let match_info = if state.search_matches.is_empty() {
+            if state.search_query.is_empty() {
+                String::new()
+            } else {
+                " (no matches)".to_string()
+            }
+        } else {
+            format!(" ({}/{})", state.search_current + 1, state.search_matches.len())
+        };
+
+        let status = Line::from(vec![
+            Span::styled("/", Style::default().fg(theme.accent)),
+            Span::styled(
+                state.search_query.clone(),
+                Style::default().fg(theme.text_bright),
+            ),
+            Span::styled(match_info, Style::default().fg(theme.text_dim)),
+        ]);
+        f.render_widget(Paragraph::new(status), chunks[3]);
     } else {
-        ((scroll as f64 / (total_lines - visible_height) as f64) * 100.0) as usize
-    };
+        let theme_name = ALL_THEMES
+            .get(state.theme_index)
+            .map(|(name, _)| *name)
+            .unwrap_or("unknown");
 
-    let status = Line::from(vec![
-        Span::styled(
-            format!(" {} ", theme_name),
-            Style::default().fg(theme.accent),
-        ),
-        Span::styled(" │ ", Style::default().fg(theme.border)),
-        Span::styled(
-            format!("{}%", scroll_pct),
-            Style::default().fg(theme.text_dim),
-        ),
-        Span::styled(" │ ", Style::default().fg(theme.border)),
-        Span::styled(
-            "?:help",
-            Style::default().fg(theme.text_muted),
-        ),
-    ]);
-    f.render_widget(Paragraph::new(status), chunks[3]);
+        let scroll_pct = if total_lines <= visible_height {
+            100
+        } else {
+            ((scroll as f64 / (total_lines - visible_height) as f64) * 100.0) as usize
+        };
+
+        let mut status_spans = vec![
+            Span::styled(
+                format!(" {} ", theme_name),
+                Style::default().fg(theme.accent),
+            ),
+            Span::styled(" │ ", Style::default().fg(theme.border)),
+            Span::styled(
+                format!("{}%", scroll_pct),
+                Style::default().fg(theme.text_dim),
+            ),
+            Span::styled(" │ ", Style::default().fg(theme.border)),
+            Span::styled(
+                "?:help",
+                Style::default().fg(theme.text_muted),
+            ),
+        ];
+
+        if !state.search_query.is_empty() {
+            status_spans.push(Span::styled(" │ ", Style::default().fg(theme.border)));
+            let match_info = if state.search_matches.is_empty() {
+                format!("/{}", state.search_query)
+            } else {
+                format!("/{} ({}/{})", state.search_query, state.search_current + 1, state.search_matches.len())
+            };
+            status_spans.push(Span::styled(match_info, Style::default().fg(theme.text_dim)));
+        }
+
+        f.render_widget(Paragraph::new(Line::from(status_spans)), chunks[3]);
+    }
+}
+
+fn highlight_search<'a>(line: Line<'a>, query: &str, theme: crate::theme::Theme) -> Line<'a> {
+    let query_lower = query.to_lowercase();
+    let highlight_style = Style::default()
+        .fg(theme.text_bright)
+        .bg(theme.accent)
+        .add_modifier(Modifier::BOLD);
+
+    let mut new_spans: Vec<Span<'a>> = Vec::new();
+
+    for span in line.spans {
+        let text = &span.content;
+        let text_lower = text.to_lowercase();
+        let mut start = 0;
+
+        loop {
+            if let Some(pos) = text_lower[start..].find(&query_lower) {
+                let abs_pos = start + pos;
+                // Text before match
+                if abs_pos > start {
+                    new_spans.push(Span::styled(
+                        text[start..abs_pos].to_string(),
+                        span.style,
+                    ));
+                }
+                // The match itself
+                new_spans.push(Span::styled(
+                    text[abs_pos..abs_pos + query.len()].to_string(),
+                    highlight_style,
+                ));
+                start = abs_pos + query.len();
+            } else {
+                // Remainder
+                if start < text.len() {
+                    new_spans.push(Span::styled(
+                        text[start..].to_string(),
+                        span.style,
+                    ));
+                }
+                break;
+            }
+        }
+    }
+
+    Line::from(new_spans)
 }
 
 fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
@@ -313,6 +413,8 @@ fn draw_help(f: &mut Frame, state: &AppState) {
         ("g / Home",     "Go to top"),
         ("G / End",      "Go to bottom"),
         ("Enter",        "Open file"),
+        ("/",            "Search"),
+        ("n / N",        "Next / previous match"),
         ("Backspace",    "Back to browser"),
         ("e",            "Edit in $EDITOR"),
         ("t",            "Theme picker"),

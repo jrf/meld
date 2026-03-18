@@ -79,7 +79,7 @@ fn main() -> io::Result<()> {
     let mut needs_redraw = true;
     loop {
         if needs_redraw {
-            terminal.draw(|f| ui::draw(f, &state))?;
+            terminal.draw(|f| ui::draw(f, &mut state))?;
             needs_redraw = false;
         }
 
@@ -163,12 +163,20 @@ fn main() -> io::Result<()> {
                                     _ => needs_redraw = false,
                                 },
                                 AppMode::Reader => match key.code {
+                                    KeyCode::Esc if !state.search_query.is_empty() => {
+                                        state.search_query.clear();
+                                        state.search_matches.clear();
+                                        state.search_current = 0;
+                                    }
                                     KeyCode::Esc | KeyCode::Backspace => {
                                         state.back_to_browser();
                                         _watcher = None;
                                     }
                                     KeyCode::Char('t') => state.open_theme_picker(),
                                     KeyCode::Char('?') => state.open_help(),
+                                    KeyCode::Char('/') => state.open_search(),
+                                    KeyCode::Char('n') => state.search_next(),
+                                    KeyCode::Char('N') => state.search_prev(),
                                     KeyCode::Char('e') => {
                                         if let Some(ref path) = state.file_path {
                                             let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
@@ -189,12 +197,40 @@ fn main() -> io::Result<()> {
                                     }
                                     KeyCode::Char('j') | KeyCode::Down => state.scroll_down(1),
                                     KeyCode::Char('k') | KeyCode::Up => state.scroll_up(1),
-                                    KeyCode::Char('d') if ctrl => state.scroll_down(20),
-                                    KeyCode::Char('u') if ctrl => state.scroll_up(20),
-                                    KeyCode::PageDown => state.scroll_down(20),
-                                    KeyCode::PageUp => state.scroll_up(20),
+                                    KeyCode::Char('d') if ctrl => {
+                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
+                                        state.scroll_down(h / 2);
+                                    }
+                                    KeyCode::Char('u') if ctrl => {
+                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
+                                        state.scroll_up(h / 2);
+                                    }
+                                    KeyCode::PageDown => {
+                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
+                                        state.scroll_down(h);
+                                    }
+                                    KeyCode::PageUp => {
+                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
+                                        state.scroll_up(h);
+                                    }
                                     KeyCode::Home | KeyCode::Char('g') => state.scroll_top(),
                                     KeyCode::End | KeyCode::Char('G') => state.scroll_bottom(),
+                                    _ => needs_redraw = false,
+                                },
+                                AppMode::Search => match key.code {
+                                    KeyCode::Esc => state.close_search(),
+                                    KeyCode::Enter => {
+                                        state.search_first();
+                                        state.mode = AppMode::Reader;
+                                    }
+                                    KeyCode::Backspace => {
+                                        state.search_query.pop();
+                                        state.update_search();
+                                    }
+                                    KeyCode::Char(c) => {
+                                        state.search_query.push(c);
+                                        state.update_search();
+                                    }
                                     _ => needs_redraw = false,
                                 },
                                 AppMode::ThemePicker { .. } => match key.code {

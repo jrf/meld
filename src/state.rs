@@ -8,6 +8,7 @@ use crate::theme::{default_theme, Theme, ALL_THEMES};
 pub enum AppMode {
     Browser,
     Reader,
+    Search,
     ThemePicker { previous_mode: PreviousMode, original_index: usize },
     Help { previous_mode: PreviousMode },
 }
@@ -23,9 +24,14 @@ pub struct AppState {
     pub content: String,
     pub file_path: Option<PathBuf>,
     pub scroll: usize,
+    pub total_lines: usize,
+    pub visible_height: usize,
     pub theme: Theme,
     pub theme_index: usize,
     pub browser: BrowserState,
+    pub search_query: String,
+    pub search_matches: Vec<usize>,
+    pub search_current: usize,
 }
 
 impl AppState {
@@ -35,8 +41,13 @@ impl AppState {
             content: String::new(),
             file_path: None,
             scroll: 0,
+            total_lines: 0,
+            visible_height: 0,
             theme: default_theme(),
             theme_index: 5,
+            search_query: String::new(),
+            search_matches: Vec::new(),
+            search_current: 0,
             browser: BrowserState::new(dir),
         }
     }
@@ -51,8 +62,13 @@ impl AppState {
             content,
             file_path: Some(file_path),
             scroll: 0,
+            total_lines: 0,
+            visible_height: 0,
             theme: default_theme(),
             theme_index: 5,
+            search_query: String::new(),
+            search_matches: Vec::new(),
+            search_current: 0,
             browser: BrowserState::new(browser_dir),
         }
     }
@@ -73,7 +89,7 @@ impl AppState {
     pub fn open_theme_picker(&mut self) {
         let prev = match self.mode {
             AppMode::Browser => PreviousMode::Browser,
-            AppMode::Reader => PreviousMode::Reader,
+            AppMode::Reader | AppMode::Search => PreviousMode::Reader,
             AppMode::ThemePicker { .. } => return,
             AppMode::Help { .. } => return,
         };
@@ -111,7 +127,7 @@ impl AppState {
     pub fn open_help(&mut self) {
         let prev = match self.mode {
             AppMode::Browser => PreviousMode::Browser,
-            AppMode::Reader => PreviousMode::Reader,
+            AppMode::Reader | AppMode::Search => PreviousMode::Reader,
             AppMode::ThemePicker { .. } => return,
             AppMode::Help { .. } => return,
         };
@@ -140,6 +156,74 @@ impl AppState {
     }
 
     pub fn scroll_bottom(&mut self) {
-        self.scroll = usize::MAX;
+        self.scroll = self.total_lines.saturating_sub(self.visible_height);
+    }
+
+    pub fn open_search(&mut self) {
+        self.search_query.clear();
+        self.search_matches.clear();
+        self.search_current = 0;
+        self.mode = AppMode::Search;
+    }
+
+    pub fn close_search(&mut self) {
+        self.search_query.clear();
+        self.search_matches.clear();
+        self.search_current = 0;
+        self.mode = AppMode::Reader;
+    }
+
+    pub fn update_search(&mut self) {
+        self.search_matches.clear();
+        self.search_current = 0;
+        if self.search_query.is_empty() {
+            return;
+        }
+        let query_lower = self.search_query.to_lowercase();
+        for (i, line) in self.content.lines().enumerate() {
+            if line.to_lowercase().contains(&query_lower) {
+                self.search_matches.push(i);
+            }
+        }
+    }
+
+    pub fn search_next(&mut self) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+        self.search_current = (self.search_current + 1) % self.search_matches.len();
+        self.scroll_to_match();
+    }
+
+    pub fn search_prev(&mut self) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+        if self.search_current == 0 {
+            self.search_current = self.search_matches.len() - 1;
+        } else {
+            self.search_current -= 1;
+        }
+        self.scroll_to_match();
+    }
+
+    pub fn search_first(&mut self) {
+        if !self.search_matches.is_empty() {
+            // Find first match at or after current scroll
+            if let Some(idx) = self.search_matches.iter().position(|&l| l >= self.scroll) {
+                self.search_current = idx;
+            } else {
+                self.search_current = 0;
+            }
+            self.scroll_to_match();
+        }
+    }
+
+    fn scroll_to_match(&mut self) {
+        if let Some(&line) = self.search_matches.get(self.search_current) {
+            // Approximate: source lines don't map 1:1 to rendered lines,
+            // but this is a reasonable heuristic
+            self.scroll = line.saturating_sub(self.visible_height / 3);
+        }
     }
 }
