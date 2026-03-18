@@ -140,19 +140,9 @@ fn draw_browser(f: &mut Frame, state: &AppState) {
     }
 
     // Status bar
-    let theme_name = ALL_THEMES
-        .get(state.theme_index)
-        .map(|(name, _)| *name)
-        .unwrap_or("unknown");
-
     let status = Line::from(vec![
         Span::styled(
-            format!(" {} ", theme_name),
-            Style::default().fg(theme.accent),
-        ),
-        Span::styled(" │ ", Style::default().fg(theme.border)),
-        Span::styled(
-            "?:help",
+            " ?:help",
             Style::default().fg(theme.text_muted),
         ),
     ]);
@@ -256,11 +246,6 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
         ]);
         f.render_widget(Paragraph::new(status), chunks[3]);
     } else {
-        let theme_name = ALL_THEMES
-            .get(state.theme_index)
-            .map(|(name, _)| *name)
-            .unwrap_or("unknown");
-
         let scroll_pct = if total_lines <= visible_height {
             100
         } else {
@@ -269,12 +254,7 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
 
         let mut status_spans = vec![
             Span::styled(
-                format!(" {} ", theme_name),
-                Style::default().fg(theme.accent),
-            ),
-            Span::styled(" │ ", Style::default().fg(theme.border)),
-            Span::styled(
-                format!("{}%", scroll_pct),
+                format!(" {}%", scroll_pct),
                 Style::default().fg(theme.text_dim),
             ),
             Span::styled(" │ ", Style::default().fg(theme.border)),
