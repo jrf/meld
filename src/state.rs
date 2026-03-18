@@ -144,7 +144,8 @@ impl AppState {
     }
 
     pub fn scroll_down(&mut self, n: usize) {
-        self.scroll = self.scroll.saturating_add(n);
+        let max = self.total_lines.saturating_sub(self.visible_height);
+        self.scroll = self.scroll.saturating_add(n).min(max);
     }
 
     pub fn scroll_up(&mut self, n: usize) {
