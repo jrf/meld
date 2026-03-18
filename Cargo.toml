@@ -1,0 +1,11 @@
+[package]
+name = "meld"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ratatui = "0.30"
+crossterm = "0.28"
+notify = "7"
+pulldown-cmark = "0.12"
+unicode-width = "0.2"
