@@ -19,8 +19,8 @@
 - [ ] Append mode — `a` to quick-add a `- [ ] task` without opening an editor
 - [ ] Syntax highlighting in fenced code blocks (syntect or tree-sitter)
 - [ ] Mouse scroll support (crossterm already emits mouse events)
-- [ ] Accept stdin (`cat file.md | meld`)
-- [ ] Persist selected theme to config file (`~/.config/meld/` on Linux, `~/Library/Application Support/meld/` on macOS)
+- [ ] Accept stdin (`cat file.md | mdr`)
+- [ ] Persist selected theme to config file (`~/.config/mdr/` on Linux, `~/Library/Application Support/mdr/` on macOS)
 - [ ] Follow markdown links — open URLs in browser, jump to local `.md` files
 - [ ] Browser preview pane (split layout showing selected file)
 - [ ] Fuzzy search/filter in browser mode

@@ -1,4 +1,4 @@
-# meld
+# mdr
 
 A terminal markdown reader with live file watching.
 
@@ -20,13 +20,13 @@ just install
 
 # Or manually
 cargo build --release
-cp target/release/meld ~/.local/bin/
+cp target/release/mdr ~/.local/bin/
 ```
 
 ## Usage
 
 ```
-meld <file.md>
+mdr <file.md>
 ```
 
 ### Keybindings

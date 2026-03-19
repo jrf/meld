@@ -17,9 +17,9 @@ No tests or linter are configured yet.
 
 ## Architecture
 
-Meld is a terminal markdown reader built with Rust, ratatui, and crossterm. It renders markdown in the terminal with syntax highlighting and live-reloads on file changes.
+mdr is a terminal markdown reader built with Rust, ratatui, and crossterm. It renders markdown in the terminal with syntax highlighting and live-reloads on file changes.
 
-**Two primary modes** — `AppMode::Browser` (file picker) and `AppMode::Reader` (markdown viewer). Without arguments, meld starts in browser mode showing `.md`/`.markdown` files and directories. Selecting a file switches to reader mode; `Esc`/`Backspace` returns to the browser. Three overlay modes stack on top: `AppMode::Search` (text input), `AppMode::ThemePicker` (modal selector), and `AppMode::Help` (keybinding reference). Overlay modes store the previous mode so they can return correctly.
+**Two primary modes** — `AppMode::Browser` (file picker) and `AppMode::Reader` (markdown viewer). Without arguments, mdr starts in browser mode showing `.md`/`.markdown` files and directories. Selecting a file switches to reader mode; `Esc`/`Backspace` returns to the browser. Three overlay modes stack on top: `AppMode::Search` (text input), `AppMode::ThemePicker` (modal selector), and `AppMode::Help` (keybinding reference). Overlay modes store the previous mode so they can return correctly.
 
 **Single-threaded event loop** (`main.rs`): Uses `crossterm::event::poll` for input and an `AtomicBool` flag (set by the notify file watcher) for file changes. Only redraws when state actually changes. Global keybindings (`q`, `Ctrl-c`, `t`) are handled first, then mode-specific bindings are dispatched.
 

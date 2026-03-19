@@ -119,7 +119,7 @@ fn draw_browser(f: &mut Frame, state: &AppState) {
     let dir_display = shorten_path(&state.browser.current_dir.display().to_string());
     let status = Line::from(vec![
         Span::styled(
-            "meld",
+            "mdr",
             Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
         ),
         Span::styled(" │ ", Style::default().fg(theme.border)),
@@ -215,7 +215,7 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
 
         let mut status_spans = vec![
             Span::styled(
-                "meld",
+                "mdr",
                 Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" │ ", Style::default().fg(theme.border)),

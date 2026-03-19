@@ -14,12 +14,12 @@ run *ARGS:
 
 # Install to ~/.local/bin
 install: release
-    cp target/release/meld ~/.local/bin/
-    codesign -s - ~/.local/bin/meld
+    cp target/release/mdr ~/.local/bin/
+    codesign -s - ~/.local/bin/mdr
 
 # Uninstall from ~/.local/bin
 uninstall:
-    rm -f ~/.local/bin/meld
+    rm -f ~/.local/bin/mdr
 
 # Remove build artifacts
 clean:
