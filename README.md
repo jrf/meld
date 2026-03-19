@@ -1,8 +1,8 @@
 # mdr
 
-A terminal markdown reader with live file watching.
+[![Rust](https://img.shields.io/badge/rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
 
-![Rust](https://img.shields.io/badge/rust-stable-orange)
+A terminal markdown reader with live file watching.
 
 ## Features
 
