@@ -118,26 +118,6 @@ impl BrowserState {
         self.selected = self.selected.saturating_sub(1);
     }
 
-    pub fn select_down_n(&mut self, n: usize) {
-        if !self.filtered_indices.is_empty() {
-            self.selected = (self.selected + n).min(self.filtered_indices.len() - 1);
-        }
-    }
-
-    pub fn select_up_n(&mut self, n: usize) {
-        self.selected = self.selected.saturating_sub(n);
-    }
-
-    pub fn select_first(&mut self) {
-        self.selected = 0;
-    }
-
-    pub fn select_last(&mut self) {
-        if !self.filtered_indices.is_empty() {
-            self.selected = self.filtered_indices.len() - 1;
-        }
-    }
-
     /// Returns Some(path) if a markdown file was selected, None if navigated into a directory.
     pub fn enter_selected(&mut self) -> Option<PathBuf> {
         let &real_index = self.filtered_indices.get(self.selected)?;

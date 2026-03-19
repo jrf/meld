@@ -6,18 +6,11 @@ use crate::browser::BrowserState;
 use crate::theme::{default_theme, Theme, ALL_THEMES};
 
 pub enum AppMode {
-    Browser,
     Reader,
     Search,
     FilePicker,
-    ThemePicker { previous_mode: PreviousMode, original_index: usize },
-    Help { previous_mode: PreviousMode },
-}
-
-#[derive(Clone, Copy)]
-pub enum PreviousMode {
-    Browser,
-    Reader,
+    ThemePicker { original_index: usize },
+    Help,
 }
 
 pub struct AppState {
@@ -36,9 +29,9 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new_browser(dir: PathBuf) -> Self {
+    pub fn new_picker(dir: PathBuf) -> Self {
         Self {
-            mode: AppMode::Browser,
+            mode: AppMode::FilePicker,
             content: String::new(),
             file_path: None,
             scroll: 0,
@@ -84,14 +77,11 @@ impl AppState {
     }
 
     pub fn open_theme_picker(&mut self) {
-        let prev = match self.mode {
-            AppMode::Browser => PreviousMode::Browser,
-            AppMode::Reader | AppMode::Search | AppMode::FilePicker => PreviousMode::Reader,
-            AppMode::ThemePicker { .. } => return,
-            AppMode::Help { .. } => return,
-        };
+        match self.mode {
+            AppMode::ThemePicker { .. } | AppMode::Help => return,
+            _ => {}
+        }
         self.mode = AppMode::ThemePicker {
-            previous_mode: prev,
             original_index: self.theme_index,
         };
     }
@@ -102,41 +92,30 @@ impl AppState {
     }
 
     pub fn theme_picker_confirm(&mut self) {
-        if let AppMode::ThemePicker { previous_mode, .. } = self.mode {
-            self.mode = match previous_mode {
-                PreviousMode::Browser => AppMode::Browser,
-                PreviousMode::Reader => AppMode::Reader,
-            };
+        if matches!(self.mode, AppMode::ThemePicker { .. }) {
+            self.mode = AppMode::Reader;
         }
     }
 
     pub fn theme_picker_cancel(&mut self) {
-        if let AppMode::ThemePicker { previous_mode, original_index } = self.mode {
+        if let AppMode::ThemePicker { original_index } = self.mode {
             self.theme_index = original_index;
             self.theme = ALL_THEMES[original_index].1;
-            self.mode = match previous_mode {
-                PreviousMode::Browser => AppMode::Browser,
-                PreviousMode::Reader => AppMode::Reader,
-            };
+            self.mode = AppMode::Reader;
         }
     }
 
     pub fn open_help(&mut self) {
-        let prev = match self.mode {
-            AppMode::Browser => PreviousMode::Browser,
-            AppMode::Reader | AppMode::Search | AppMode::FilePicker => PreviousMode::Reader,
-            AppMode::ThemePicker { .. } => return,
-            AppMode::Help { .. } => return,
-        };
-        self.mode = AppMode::Help { previous_mode: prev };
+        match self.mode {
+            AppMode::ThemePicker { .. } | AppMode::Help => return,
+            _ => {}
+        }
+        self.mode = AppMode::Help;
     }
 
     pub fn close_help(&mut self) {
-        if let AppMode::Help { previous_mode } = self.mode {
-            self.mode = match previous_mode {
-                PreviousMode::Browser => AppMode::Browser,
-                PreviousMode::Reader => AppMode::Reader,
-            };
+        if matches!(self.mode, AppMode::Help) {
+            self.mode = AppMode::Reader;
         }
     }
 
@@ -207,7 +186,6 @@ impl AppState {
 
     pub fn search_first(&mut self) {
         if !self.search_matches.is_empty() {
-            // Find first match at or after current scroll
             if let Some(idx) = self.search_matches.iter().position(|&l| l >= self.scroll) {
                 self.search_current = idx;
             } else {
@@ -219,8 +197,6 @@ impl AppState {
 
     fn scroll_to_match(&mut self) {
         if let Some(&line) = self.search_matches.get(self.search_current) {
-            // Approximate: source lines don't map 1:1 to rendered lines,
-            // but this is a reasonable heuristic
             self.scroll = line.saturating_sub(self.visible_height / 3);
         }
     }

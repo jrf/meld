@@ -19,30 +19,12 @@ fn shorten_path(path: &str) -> String {
 }
 
 pub fn draw(f: &mut Frame, state: &mut AppState) {
+    draw_reader(f, state);
     match state.mode {
-        AppMode::Browser => draw_browser(f, state),
-        AppMode::Reader => draw_reader(f, state),
-        AppMode::Search => draw_reader(f, state),
-        AppMode::FilePicker => {
-            draw_reader(f, state);
-            draw_file_picker(f, state);
-        }
-        AppMode::ThemePicker { .. } => {
-            if let AppMode::ThemePicker { previous_mode, .. } = state.mode {
-                match previous_mode {
-                    crate::state::PreviousMode::Browser => draw_browser(f, state),
-                    crate::state::PreviousMode::Reader => draw_reader(f, state),
-                }
-            }
-            draw_theme_picker(f, state);
-        }
-        AppMode::Help { previous_mode } => {
-            match previous_mode {
-                crate::state::PreviousMode::Browser => draw_browser(f, state),
-                crate::state::PreviousMode::Reader => draw_reader(f, state),
-            }
-            draw_help(f, state);
-        }
+        AppMode::Reader | AppMode::Search => {}
+        AppMode::FilePicker => draw_file_picker(f, state),
+        AppMode::ThemePicker { .. } => draw_theme_picker(f, state),
+        AppMode::Help => draw_help(f, state),
     }
 }
 
@@ -97,62 +79,6 @@ fn render_entry_list(
     } else {
         f.render_widget(Paragraph::new(lines), area);
     }
-}
-
-fn draw_browser(f: &mut Frame, state: &AppState) {
-    let area = f.area();
-    let theme = state.theme;
-
-    let outer_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.border))
-        .padding(Padding::horizontal(1));
-
-    let inner = outer_block.inner(area);
-    f.render_widget(outer_block, area);
-
-    let chunks = Layout::vertical([
-        Constraint::Min(1),   // file list
-        Constraint::Length(1), // status bar
-    ])
-    .split(inner);
-
-    let content_area = chunks[0];
-    let visible_height = content_area.height as usize;
-    let selected = state.browser.selected;
-
-    let entries: Vec<_> = state.browser.filtered_entries()
-        .into_iter()
-        .enumerate()
-        .map(|(i, (_idx, entry))| (entry, i == selected))
-        .collect();
-
-    render_entry_list(
-        &entries,
-        theme,
-        "   No markdown files found",
-        state.browser.scroll_offset,
-        visible_height,
-        content_area,
-        f,
-    );
-
-    // Status bar
-    let dir_display = shorten_path(&state.browser.current_dir.display().to_string());
-    let status = Line::from(vec![
-        Span::styled(
-            "mdr",
-            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(" │ ", Style::default().fg(theme.border)),
-        Span::styled(dir_display, Style::default().fg(theme.text)),
-        Span::styled(" │ ", Style::default().fg(theme.border)),
-        Span::styled(
-            "?:help",
-            Style::default().fg(theme.text_muted),
-        ),
-    ]);
-    f.render_widget(Paragraph::new(status), chunks[1]);
 }
 
 fn draw_reader(f: &mut Frame, state: &mut AppState) {

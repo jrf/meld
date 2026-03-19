@@ -56,7 +56,7 @@ fn main() -> io::Result<()> {
         AppState::new_reader(file_path, content)
     } else {
         let dir = env::current_dir()?;
-        AppState::new_browser(dir)
+        AppState::new_picker(dir)
     };
 
     // File change flag (set by watcher, cleared by main loop)
@@ -107,61 +107,6 @@ fn main() -> io::Result<()> {
                             KeyCode::Char('q') => break,
                             KeyCode::Char('c') if ctrl => break,
                             _ => match state.mode {
-                                AppMode::Browser => match key.code {
-                                    KeyCode::Char('t') => state.open_theme_picker(),
-                                    KeyCode::Char('?') => state.open_help(),
-                                    KeyCode::Char('j') | KeyCode::Down => {
-                                        state.browser.select_down();
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.browser.adjust_scroll(h);
-                                    }
-                                    KeyCode::Char('k') | KeyCode::Up => {
-                                        state.browser.select_up();
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.browser.adjust_scroll(h);
-                                    }
-                                    KeyCode::Char('f') if ctrl => {
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.browser.select_down_n(h);
-                                        state.browser.adjust_scroll(h);
-                                    }
-                                    KeyCode::Char('b') if ctrl => {
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.browser.select_up_n(h);
-                                        state.browser.adjust_scroll(h);
-                                    }
-                                    KeyCode::PageDown => {
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.browser.select_down_n(h);
-                                        state.browser.adjust_scroll(h);
-                                    }
-                                    KeyCode::PageUp => {
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.browser.select_up_n(h);
-                                        state.browser.adjust_scroll(h);
-                                    }
-                                    KeyCode::Home | KeyCode::Char('g') => {
-                                        state.browser.select_first();
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.browser.adjust_scroll(h);
-                                    }
-                                    KeyCode::End | KeyCode::Char('G') => {
-                                        state.browser.select_last();
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.browser.adjust_scroll(h);
-                                    }
-                                    KeyCode::Enter => {
-                                        if let Some(file_path) = state.browser.enter_selected() {
-                                            if state.open_file(file_path).is_ok() {
-                                                _watcher = state
-                                                    .file_path
-                                                    .as_ref()
-                                                    .and_then(|p| setup_watcher(p, file_dirty.clone()));
-                                            }
-                                        }
-                                    }
-                                    _ => needs_redraw = false,
-                                },
                                 AppMode::Reader => match key.code {
                                     KeyCode::Esc if !state.search_query.is_empty() => {
                                         state.search_query.clear();
@@ -181,7 +126,6 @@ fn main() -> io::Result<()> {
                                     KeyCode::Char('e') => {
                                         if let Some(ref path) = state.file_path {
                                             let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-                                            // Leave TUI, run editor, restore TUI
                                             disable_raw_mode()?;
                                             execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
                                             let _ = Command::new(&editor)
@@ -190,7 +134,6 @@ fn main() -> io::Result<()> {
                                             enable_raw_mode()?;
                                             execute!(terminal.backend_mut(), EnterAlternateScreen)?;
                                             terminal.clear()?;
-                                            // Reload file content
                                             if let Ok(new_content) = fs::read_to_string(path) {
                                                 state.content = new_content;
                                             }
@@ -291,7 +234,7 @@ fn main() -> io::Result<()> {
                                     KeyCode::Esc => state.theme_picker_cancel(),
                                     _ => needs_redraw = false,
                                 },
-                                AppMode::Help { .. } => match key.code {
+                                AppMode::Help => match key.code {
                                     KeyCode::Esc | KeyCode::Char('?') | KeyCode::Enter => {
                                         state.close_help();
                                     }
