@@ -9,6 +9,7 @@ pub enum AppMode {
     Browser,
     Reader,
     Search,
+    FilePicker,
     ThemePicker { previous_mode: PreviousMode, original_index: usize },
     Help { previous_mode: PreviousMode },
 }
@@ -82,14 +83,10 @@ impl AppState {
         Ok(())
     }
 
-    pub fn back_to_browser(&mut self) {
-        self.mode = AppMode::Browser;
-    }
-
     pub fn open_theme_picker(&mut self) {
         let prev = match self.mode {
             AppMode::Browser => PreviousMode::Browser,
-            AppMode::Reader | AppMode::Search => PreviousMode::Reader,
+            AppMode::Reader | AppMode::Search | AppMode::FilePicker => PreviousMode::Reader,
             AppMode::ThemePicker { .. } => return,
             AppMode::Help { .. } => return,
         };
@@ -127,7 +124,7 @@ impl AppState {
     pub fn open_help(&mut self) {
         let prev = match self.mode {
             AppMode::Browser => PreviousMode::Browser,
-            AppMode::Reader | AppMode::Search => PreviousMode::Reader,
+            AppMode::Reader | AppMode::Search | AppMode::FilePicker => PreviousMode::Reader,
             AppMode::ThemePicker { .. } => return,
             AppMode::Help { .. } => return,
         };

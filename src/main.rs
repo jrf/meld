@@ -168,9 +168,10 @@ fn main() -> io::Result<()> {
                                         state.search_matches.clear();
                                         state.search_current = 0;
                                     }
-                                    KeyCode::Esc | KeyCode::Backspace => {
-                                        state.back_to_browser();
-                                        _watcher = None;
+                                    KeyCode::Char('f') if !ctrl => {
+                                        state.browser.filter.clear();
+                                        state.browser.rebuild_filter();
+                                        state.mode = AppMode::FilePicker;
                                     }
                                     KeyCode::Char('t') => state.open_theme_picker(),
                                     KeyCode::Char('?') => state.open_help(),
@@ -215,6 +216,46 @@ fn main() -> io::Result<()> {
                                     }
                                     KeyCode::Home | KeyCode::Char('g') => state.scroll_top(),
                                     KeyCode::End | KeyCode::Char('G') => state.scroll_bottom(),
+                                    _ => needs_redraw = false,
+                                },
+                                AppMode::FilePicker => match key.code {
+                                    KeyCode::Down => {
+                                        state.browser.select_down();
+                                        let h = (terminal.size()?.height as usize * 3 / 4).saturating_sub(4);
+                                        state.browser.adjust_scroll(h);
+                                    }
+                                    KeyCode::Up => {
+                                        state.browser.select_up();
+                                        let h = (terminal.size()?.height as usize * 3 / 4).saturating_sub(4);
+                                        state.browser.adjust_scroll(h);
+                                    }
+                                    KeyCode::Enter => {
+                                        if let Some(file_path) = state.browser.enter_selected() {
+                                            if state.open_file(file_path).is_ok() {
+                                                _watcher = state
+                                                    .file_path
+                                                    .as_ref()
+                                                    .and_then(|p| setup_watcher(p, file_dirty.clone()));
+                                            }
+                                        }
+                                    }
+                                    KeyCode::Esc => {
+                                        state.browser.filter.clear();
+                                        state.browser.rebuild_filter();
+                                        state.mode = AppMode::Reader;
+                                    }
+                                    KeyCode::Backspace => {
+                                        state.browser.filter.pop();
+                                        state.browser.rebuild_filter();
+                                        state.browser.selected = 0;
+                                        state.browser.scroll_offset = 0;
+                                    }
+                                    KeyCode::Char(c) => {
+                                        state.browser.filter.push(c);
+                                        state.browser.rebuild_filter();
+                                        state.browser.selected = 0;
+                                        state.browser.scroll_offset = 0;
+                                    }
                                     _ => needs_redraw = false,
                                 },
                                 AppMode::Search => match key.code {

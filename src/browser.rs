@@ -11,6 +11,8 @@ pub struct BrowserState {
     pub entries: Vec<BrowserEntry>,
     pub selected: usize,
     pub scroll_offset: usize,
+    pub filter: String,
+    pub filtered_indices: Vec<usize>,
 }
 
 impl BrowserState {
@@ -20,6 +22,8 @@ impl BrowserState {
             entries: Vec::new(),
             selected: 0,
             scroll_offset: 0,
+            filter: String::new(),
+            filtered_indices: Vec::new(),
         };
         state.load_dir();
         state
@@ -27,6 +31,7 @@ impl BrowserState {
 
     pub fn load_dir(&mut self) {
         self.entries.clear();
+        self.filter.clear();
 
         // Add parent directory entry
         if let Some(parent) = self.current_dir.parent() {
@@ -38,6 +43,7 @@ impl BrowserState {
         }
 
         let Ok(read_dir) = std::fs::read_dir(&self.current_dir) else {
+            self.rebuild_filter();
             return;
         };
 
@@ -75,13 +81,36 @@ impl BrowserState {
 
         self.entries.extend(dirs);
         self.entries.extend(files);
+        self.rebuild_filter();
         self.selected = 0;
         self.scroll_offset = 0;
     }
 
+    pub fn rebuild_filter(&mut self) {
+        if self.filter.is_empty() {
+            self.filtered_indices = (0..self.entries.len()).collect();
+        } else {
+            let query = self.filter.to_lowercase();
+            self.filtered_indices = self
+                .entries
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| e.name.to_lowercase().contains(&query))
+                .map(|(i, _)| i)
+                .collect();
+        }
+    }
+
+    pub fn filtered_entries(&self) -> Vec<(usize, &BrowserEntry)> {
+        self.filtered_indices
+            .iter()
+            .map(|&i| (i, &self.entries[i]))
+            .collect()
+    }
+
     pub fn select_down(&mut self) {
-        if !self.entries.is_empty() {
-            self.selected = (self.selected + 1).min(self.entries.len() - 1);
+        if !self.filtered_indices.is_empty() {
+            self.selected = (self.selected + 1).min(self.filtered_indices.len() - 1);
         }
     }
 
@@ -90,8 +119,8 @@ impl BrowserState {
     }
 
     pub fn select_down_n(&mut self, n: usize) {
-        if !self.entries.is_empty() {
-            self.selected = (self.selected + n).min(self.entries.len() - 1);
+        if !self.filtered_indices.is_empty() {
+            self.selected = (self.selected + n).min(self.filtered_indices.len() - 1);
         }
     }
 
@@ -104,14 +133,15 @@ impl BrowserState {
     }
 
     pub fn select_last(&mut self) {
-        if !self.entries.is_empty() {
-            self.selected = self.entries.len() - 1;
+        if !self.filtered_indices.is_empty() {
+            self.selected = self.filtered_indices.len() - 1;
         }
     }
 
     /// Returns Some(path) if a markdown file was selected, None if navigated into a directory.
     pub fn enter_selected(&mut self) -> Option<PathBuf> {
-        let entry = self.entries.get(self.selected)?;
+        let &real_index = self.filtered_indices.get(self.selected)?;
+        let entry = &self.entries[real_index];
         if entry.is_dir {
             self.current_dir = entry.path.clone();
             self.load_dir();

@@ -23,6 +23,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         AppMode::Browser => draw_browser(f, state),
         AppMode::Reader => draw_reader(f, state),
         AppMode::Search => draw_reader(f, state),
+        AppMode::FilePicker => {
+            draw_reader(f, state);
+            draw_file_picker(f, state);
+        }
         AppMode::ThemePicker { .. } => {
             if let AppMode::ThemePicker { previous_mode, .. } = state.mode {
                 match previous_mode {
@@ -39,6 +43,59 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
             draw_help(f, state);
         }
+    }
+}
+
+fn render_entry_list(
+    entries: &[(&crate::browser::BrowserEntry, bool)],
+    theme: crate::theme::Theme,
+    empty_msg: &str,
+    scroll: usize,
+    visible_height: usize,
+    area: Rect,
+    f: &mut Frame,
+) {
+    let lines: Vec<Line> = entries
+        .iter()
+        .enumerate()
+        .skip(scroll)
+        .take(visible_height)
+        .map(|(_, (entry, is_selected))| {
+            let prefix = if *is_selected { " > " } else { "   " };
+
+            let icon = if entry.name == ".." {
+                "^ "
+            } else if entry.is_dir {
+                "/ "
+            } else {
+                "  "
+            };
+
+            let style = if *is_selected {
+                Style::default()
+                    .fg(theme.text_bright)
+                    .add_modifier(Modifier::BOLD)
+            } else if entry.name == ".." {
+                Style::default().fg(theme.text_dim)
+            } else if entry.is_dir {
+                Style::default().fg(theme.accent)
+            } else {
+                Style::default().fg(theme.text)
+            };
+
+            Line::from(vec![
+                Span::styled(prefix, style),
+                Span::styled(icon, style),
+                Span::styled(entry.name.as_str(), style),
+            ])
+        })
+        .collect();
+
+    if lines.is_empty() {
+        let empty = Line::from(Span::styled(empty_msg, Style::default().fg(theme.text_dim)));
+        f.render_widget(Paragraph::new(vec![empty]), area);
+    } else {
+        f.render_widget(Paragraph::new(lines), area);
     }
 }
 
@@ -60,60 +117,25 @@ fn draw_browser(f: &mut Frame, state: &AppState) {
     ])
     .split(inner);
 
-    // File list
     let content_area = chunks[0];
     let visible_height = content_area.height as usize;
-
-    let entries = &state.browser.entries;
     let selected = state.browser.selected;
-    let scroll = state.browser.scroll_offset;
 
-    let lines: Vec<Line> = entries
-        .iter()
+    let entries: Vec<_> = state.browser.filtered_entries()
+        .into_iter()
         .enumerate()
-        .skip(scroll)
-        .take(visible_height)
-        .map(|(i, entry)| {
-            let is_selected = i == selected;
-            let prefix = if is_selected { "> " } else { "  " };
-
-            let icon = if entry.name == ".." {
-                "^ "
-            } else if entry.is_dir {
-                "/ "
-            } else {
-                "  "
-            };
-
-            let style = if is_selected {
-                Style::default()
-                    .fg(theme.text_bright)
-                    .add_modifier(Modifier::BOLD)
-            } else if entry.name == ".." {
-                Style::default().fg(theme.text_dim)
-            } else if entry.is_dir {
-                Style::default().fg(theme.accent)
-            } else {
-                Style::default().fg(theme.text)
-            };
-
-            Line::from(vec![
-                Span::styled(prefix, style),
-                Span::styled(icon, style),
-                Span::styled(&entry.name, style),
-            ])
-        })
+        .map(|(i, (_idx, entry))| (entry, i == selected))
         .collect();
 
-    if lines.is_empty() {
-        let empty = Line::from(Span::styled(
-            "  No markdown files found",
-            Style::default().fg(theme.text_dim),
-        ));
-        f.render_widget(Paragraph::new(vec![empty]), content_area);
-    } else {
-        f.render_widget(Paragraph::new(lines), content_area);
-    }
+    render_entry_list(
+        &entries,
+        theme,
+        "   No markdown files found",
+        state.browser.scroll_offset,
+        visible_height,
+        content_area,
+        f,
+    );
 
     // Status bar
     let dir_display = shorten_path(&state.browser.current_dir.display().to_string());
@@ -298,6 +320,83 @@ fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     Rect::new(x, y, width.min(area.width), height.min(area.height))
 }
 
+fn draw_file_picker(f: &mut Frame, state: &AppState) {
+    let theme = state.theme;
+    let area = f.area();
+
+    let height = area.height * 3 / 4;
+    let width = (area.width * 3 / 4).max(50).min(area.width.saturating_sub(4));
+    let popup = centered_rect(width, height, area);
+
+    f.render_widget(Clear, popup);
+
+    let dir_display = shorten_path(&state.browser.current_dir.display().to_string());
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.accent))
+        .title(format!(" {} ", dir_display))
+        .title_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD));
+
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let chunks = Layout::vertical([
+        Constraint::Length(1), // filter input
+        Constraint::Min(1),   // file list
+        Constraint::Length(1), // hint
+    ])
+    .split(inner);
+
+    // Filter input
+    let filter_line = if state.browser.filter.is_empty() {
+        Line::from(Span::styled(
+            " type to filter...",
+            Style::default().fg(theme.text_muted),
+        ))
+    } else {
+        Line::from(vec![
+            Span::styled(" > ", Style::default().fg(theme.accent)),
+            Span::styled(
+                state.browser.filter.clone(),
+                Style::default().fg(theme.text_bright),
+            ),
+        ])
+    };
+    f.render_widget(Paragraph::new(filter_line), chunks[0]);
+
+    // File list
+    let content_height = chunks[1].height as usize;
+    let selected = state.browser.selected;
+
+    let entries: Vec<_> = state.browser.filtered_entries()
+        .into_iter()
+        .enumerate()
+        .map(|(i, (_idx, entry))| (entry, i == selected))
+        .collect();
+
+    let empty_msg = if state.browser.filter.is_empty() {
+        "   No markdown files found"
+    } else {
+        "   No matches"
+    };
+
+    render_entry_list(
+        &entries,
+        theme,
+        empty_msg,
+        state.browser.scroll_offset,
+        content_height,
+        chunks[1],
+        f,
+    );
+
+    let hint = Line::from(Span::styled(
+        " enter:open  esc:close",
+        Style::default().fg(theme.text_muted),
+    ));
+    f.render_widget(Paragraph::new(hint), chunks[2]);
+}
+
 fn draw_theme_picker(f: &mut Frame, state: &AppState) {
     let theme = state.theme;
     let area = f.area();
@@ -363,7 +462,7 @@ fn draw_help(f: &mut Frame, state: &AppState) {
         ("Enter",        "Open file"),
         ("/",            "Search"),
         ("n / N",        "Next / previous match"),
-        ("Backspace",    "Back to browser"),
+        ("f",            "File picker"),
         ("e",            "Edit in $EDITOR"),
         ("t",            "Theme picker"),
         ("?",            "Toggle help"),
