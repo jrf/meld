@@ -4,7 +4,7 @@
 
 - [x] Auto-refresh file picker when files are added/removed in the watched directory
 - [ ] Task-aware navigation (`]t` / `[t` to jump between unchecked tasks)
-- [ ] Task summary in status bar (e.g., `3/7 tasks`)
+- [x] Task summary in status bar (e.g., `3/7 tasks`)
 
 ## Next
 
@@ -19,12 +19,13 @@
 - [ ] Syntax highlighting in fenced code blocks (syntect or tree-sitter)
 - [ ] Mouse scroll support (crossterm already emits mouse events)
 - [ ] Accept stdin (`cat file.md | mdr`)
-- [ ] Persist selected theme to config file (`~/.config/mdr/` on Linux, `~/Library/Application Support/mdr/` on macOS)
+- [x] Persist selected theme to config file (`~/.config/mdr/` on Linux, `~/Library/Application Support/mdr/` on macOS)
 - [ ] Follow markdown links — open URLs in browser, jump to local `.md` files
 - [ ] Browser preview pane (split layout showing selected file)
 - [ ] Fuzzy search/filter in browser mode
 - [ ] Scrollbar widget
 - [ ] Footnote rendering
+- [ ] Tidy command — keybind to move completed `[x]` tasks to a "Done" section
 
 ## Done
 
@@ -37,3 +38,4 @@
 - [x] Cache parsed markdown — only re-parse when content changes, not on every scroll/redraw
 - [x] Toggle checkboxes in-place (`x` or `Space` on a task line) — flip `[ ]` / `[x]` and write back to file
 - [x] Cursor-based navigation with line highlighting
+- [x] Persist selected theme to config file

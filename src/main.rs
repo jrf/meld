@@ -1,4 +1,5 @@
 mod browser;
+mod config;
 mod markdown;
 mod state;
 mod theme;
@@ -62,16 +63,21 @@ fn setup_dir_watcher(dir: &PathBuf, flag: Arc<AtomicBool>) -> Option<Recommended
 fn main() -> io::Result<()> {
     let file_arg = env::args().nth(1);
 
+    let initial_theme = config::load_theme_name()
+        .and_then(|name| theme::find_theme(&name))
+        .map(|(idx, _)| idx)
+        .unwrap_or(5);
+
     let mut state = if let Some(ref arg) = file_arg {
         let file_path = PathBuf::from(arg).canonicalize().map_err(|e| {
             eprintln!("error: {}: {}", arg, e);
             e
         })?;
         let content = fs::read_to_string(&file_path)?;
-        AppState::new_reader(file_path, content)
+        AppState::new_reader(file_path, content, initial_theme)
     } else {
         let dir = env::current_dir()?;
-        AppState::new_picker(dir)
+        AppState::new_picker(dir, initial_theme)
     };
 
     // File change flag (set by watcher, cleared by main loop)

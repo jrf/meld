@@ -101,11 +101,6 @@ pub const ALL_THEMES: &[(&str, Theme)] = &[
     ),
 ];
 
-pub fn default_theme() -> Theme {
-    ALL_THEMES[5].1
-}
-
-#[allow(dead_code)]
 pub fn find_theme(name: &str) -> Option<(usize, Theme)> {
     ALL_THEMES
         .iter()
