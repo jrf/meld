@@ -40,3 +40,8 @@ mdr is a terminal markdown reader built with Rust, ratatui, and crossterm. It re
 **File picker** (`f` key): Opens a centered overlay listing `.md` files and directories from the current file's parent dir. Supports type-to-filter, directory navigation, and opens selected files in reader mode with a new file watcher.
 
 **External editor** (`main.rs`): In reader mode, `e` suspends the TUI, launches `$EDITOR` (or `vi`) on the current file, then restores the TUI and reloads content.
+
+## Workflow Rules
+
+- **TODO.md must be kept meticulously updated.** When completing a feature or fix, add it to the Done section. When discovering new work, add it to the appropriate section (Now/Next/Later).
+- **README.md must be kept meticulously updated.** When adding or changing features, keybindings, configuration options, or setup instructions, update the README to match.
