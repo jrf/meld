@@ -32,7 +32,7 @@ mdr is a terminal markdown reader built with Rust, ratatui, and crossterm. It re
 - `markdown.rs` — pulldown-cmark event loop (using `into_offset_iter()`) producing styled, word-wrapped lines. Handles headings, code blocks, blockquotes, lists (ordered/unordered), task lists, inline formatting, and horizontal rules. Each `StyledLine` carries an optional `source_line` for task items, enabling checkbox toggling.
 - `ui.rs` — ratatui rendering: reader with status bar, plus centered popup overlays for file picker, theme picker, and help. Search highlighting is applied post-parse in `highlight_search`.
 - `theme.rs` — six color themes using 256-color indexed palette (`ALL_THEMES` array). Default is "tokyo night moon" (index 5). Themes are selected at runtime via the theme picker (`t`).
-- `config.rs` — persists user settings (currently just theme name) to `~/.config/mdr/config.toml`. TOML format. Loaded at startup, saved on theme confirm.
+- `config.rs` — persists user settings to `~/.config/mdr/config.toml`. TOML format with `theme` and `scrollbar` keys. `Config` struct loaded at startup, saved on theme confirm.
 
 **Key dependencies**: ratatui 0.30, crossterm 0.28, pulldown-cmark 0.12, notify 7, unicode-width 0.2. Version matters — ratatui and crossterm APIs change significantly between major versions.
 
@@ -44,5 +44,5 @@ mdr is a terminal markdown reader built with Rust, ratatui, and crossterm. It re
 
 ## Workflow Rules
 
-- **TODO.md must be kept meticulously updated.** When completing a feature or fix, add it to the Done section. When discovering new work, add it to the appropriate section (Now/Next/Later).
+- **TODO.md must be kept meticulously updated.** When marking a task `[x]`, always move it from its current section to Done in the same edit. Never leave checked items in Now/Next/Later. When discovering new work, add it to the appropriate section.
 - **README.md must be kept meticulously updated.** When adding or changing features, keybindings, configuration options, or setup instructions, update the README to match.

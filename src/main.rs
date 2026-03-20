@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers, MouseEventKind, EnableMouseCapture, DisableMouseCapture};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -63,8 +63,9 @@ fn setup_dir_watcher(dir: &PathBuf, flag: Arc<AtomicBool>) -> Option<Recommended
 fn main() -> io::Result<()> {
     let file_arg = env::args().nth(1);
 
-    let initial_theme = config::load_theme_name()
-        .and_then(|name| theme::find_theme(&name))
+    let cfg = config::load_config();
+    let initial_theme = cfg.theme.as_deref()
+        .and_then(|name| theme::find_theme(name))
         .map(|(idx, _)| idx)
         .unwrap_or(5);
 
@@ -74,10 +75,10 @@ fn main() -> io::Result<()> {
             e
         })?;
         let content = fs::read_to_string(&file_path)?;
-        AppState::new_reader(file_path, content, initial_theme)
+        AppState::new_reader(file_path, content, initial_theme, cfg.scrollbar)
     } else {
         let dir = env::current_dir()?;
-        AppState::new_picker(dir, initial_theme)
+        AppState::new_picker(dir, initial_theme, cfg.scrollbar)
     };
 
     // File change flag (set by watcher, cleared by main loop)
@@ -97,7 +98,7 @@ fn main() -> io::Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -115,6 +116,7 @@ fn main() -> io::Result<()> {
                 if let Ok(new_content) = fs::read_to_string(path) {
                     if new_content != state.content {
                         state.content = new_content;
+                        state.file_updated = true;
                         needs_redraw = true;
                     }
                 }
@@ -133,6 +135,7 @@ fn main() -> io::Result<()> {
                 match ev {
                     Event::Key(key) => {
                         needs_redraw = true;
+                        state.file_updated = false;
                         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
                         match key.code {
@@ -150,6 +153,7 @@ fn main() -> io::Result<()> {
                                         state.browser.rebuild_filter();
                                         state.mode = AppMode::FilePicker;
                                     }
+                                    KeyCode::Char('F') => state.toggle_filter_tasks(),
                                     KeyCode::Char('t') => state.open_theme_picker(),
                                     KeyCode::Char('?') => state.open_help(),
                                     KeyCode::Char('/') => state.open_search(),
@@ -159,12 +163,12 @@ fn main() -> io::Result<()> {
                                         if let Some(ref path) = state.file_path {
                                             let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
                                             disable_raw_mode()?;
-                                            execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+                                            execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
                                             let _ = Command::new(&editor)
                                                 .arg(path)
                                                 .status();
                                             enable_raw_mode()?;
-                                            execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+                                            execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture)?;
                                             terminal.clear()?;
                                             if let Ok(new_content) = fs::read_to_string(path) {
                                                 state.content = new_content;
@@ -174,6 +178,8 @@ fn main() -> io::Result<()> {
                                     KeyCode::Char('x') | KeyCode::Char(' ') => {
                                         state.toggle_checkbox();
                                     }
+                                    KeyCode::Tab => state.next_task(),
+                                    KeyCode::BackTab => state.prev_task(),
                                     KeyCode::Char('j') | KeyCode::Down => state.cursor_down(1),
                                     KeyCode::Char('k') | KeyCode::Up => state.cursor_up(1),
                                     KeyCode::Char('f') if ctrl => {
@@ -288,6 +294,19 @@ fn main() -> io::Result<()> {
                             },
                         }
                     }
+                    Event::Mouse(mouse) => {
+                        match mouse.kind {
+                            MouseEventKind::ScrollDown => {
+                                state.scroll_viewport(3, true);
+                                needs_redraw = true;
+                            }
+                            MouseEventKind::ScrollUp => {
+                                state.scroll_viewport(3, false);
+                                needs_redraw = true;
+                            }
+                            _ => {}
+                        }
+                    }
                     Event::Resize(_, _) => needs_redraw = true,
                     _ => {}
                 }
@@ -297,6 +316,6 @@ fn main() -> io::Result<()> {
 
     // Cleanup
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
     Ok(())
 }

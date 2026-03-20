@@ -27,6 +27,8 @@ pub struct AppState {
     pub theme_index: usize,
     pub browser: BrowserState,
     pub cursor: usize,
+    pub file_updated: bool,
+    pub filter_tasks: bool,
     pub search_query: String,
     pub search_matches: Vec<usize>,
     pub search_current: usize,
@@ -35,10 +37,12 @@ pub struct AppState {
     pub cache_content_hash: u64,
     pub cache_theme: Theme,
     pub cache_width: u16,
+    pub cache_filter: bool,
+    pub scrollbar: bool,
 }
 
 impl AppState {
-    pub fn new_picker(dir: PathBuf, theme_index: usize) -> Self {
+    pub fn new_picker(dir: PathBuf, theme_index: usize, scrollbar: bool) -> Self {
         Self {
             mode: AppMode::FilePicker,
             content: String::new(),
@@ -48,6 +52,8 @@ impl AppState {
             visible_height: 0,
             theme: ALL_THEMES[theme_index].1,
             theme_index,
+            file_updated: false,
+            filter_tasks: false,
             search_query: String::new(),
             search_matches: Vec::new(),
             search_current: 0,
@@ -57,10 +63,12 @@ impl AppState {
             cache_content_hash: 0,
             cache_theme: ALL_THEMES[theme_index].1,
             cache_width: 0,
+            cache_filter: false,
+            scrollbar,
         }
     }
 
-    pub fn new_reader(file_path: PathBuf, content: String, theme_index: usize) -> Self {
+    pub fn new_reader(file_path: PathBuf, content: String, theme_index: usize, scrollbar: bool) -> Self {
         let browser_dir = file_path
             .parent()
             .map(|p| p.to_path_buf())
@@ -74,6 +82,8 @@ impl AppState {
             visible_height: 0,
             theme: ALL_THEMES[theme_index].1,
             theme_index,
+            file_updated: false,
+            filter_tasks: false,
             search_query: String::new(),
             search_matches: Vec::new(),
             search_current: 0,
@@ -83,6 +93,8 @@ impl AppState {
             cache_content_hash: 0,
             cache_theme: ALL_THEMES[theme_index].1,
             cache_width: 0,
+            cache_filter: false,
+            scrollbar,
         }
     }
 
@@ -104,11 +116,20 @@ impl AppState {
 
     pub fn get_parsed_lines(&mut self, width: u16) -> &[StyledLine<'static>] {
         let hash = self.content_hash();
-        if hash != self.cache_content_hash || self.theme != self.cache_theme || width != self.cache_width {
-            self.cached_lines = crate::markdown::parse_markdown(&self.content, self.theme, width);
+        if hash != self.cache_content_hash
+            || self.theme != self.cache_theme
+            || width != self.cache_width
+            || self.filter_tasks != self.cache_filter
+        {
+            let mut lines = crate::markdown::parse_markdown(&self.content, self.theme, width);
+            if self.filter_tasks {
+                lines = filter_task_lines(lines);
+            }
+            self.cached_lines = lines;
             self.cache_content_hash = hash;
             self.cache_theme = self.theme;
             self.cache_width = width;
+            self.cache_filter = self.filter_tasks;
         }
         &self.cached_lines
     }
@@ -130,7 +151,9 @@ impl AppState {
 
     pub fn theme_picker_confirm(&mut self) {
         if matches!(self.mode, AppMode::ThemePicker { .. }) {
-            crate::config::save_theme_name(ALL_THEMES[self.theme_index].0);
+            let mut cfg = crate::config::load_config();
+            cfg.theme = Some(ALL_THEMES[self.theme_index].0.to_string());
+            crate::config::save_config(&cfg);
             self.mode = AppMode::Reader;
         }
     }
@@ -176,6 +199,22 @@ impl AppState {
     pub fn cursor_bottom(&mut self) {
         self.cursor = self.total_lines.saturating_sub(1);
         self.scroll = self.total_lines.saturating_sub(self.visible_height);
+    }
+
+    /// Scroll the viewport without moving the cursor, then clamp cursor to stay visible.
+    pub fn scroll_viewport(&mut self, n: usize, down: bool) {
+        let max_scroll = self.total_lines.saturating_sub(self.visible_height);
+        if down {
+            self.scroll = self.scroll.saturating_add(n).min(max_scroll);
+        } else {
+            self.scroll = self.scroll.saturating_sub(n);
+        }
+        // Clamp cursor to visible range
+        if self.cursor < self.scroll {
+            self.cursor = self.scroll;
+        } else if self.cursor >= self.scroll + self.visible_height {
+            self.cursor = self.scroll + self.visible_height - 1;
+        }
     }
 
     fn ensure_cursor_visible(&mut self) {
@@ -236,6 +275,52 @@ impl AppState {
         self.cache_content_hash = 0;
 
         true
+    }
+
+    /// Jump cursor to the next unchecked task (`- [ ]`).
+    pub fn next_task(&mut self) {
+        let start = self.cursor + 1;
+        let len = self.cached_lines.len();
+        for i in 0..len {
+            let idx = (start + i) % len;
+            if let Some(sl) = self.cached_lines.get(idx) {
+                if let Some(src) = sl.source_line {
+                    let line = self.content.lines().nth(src).unwrap_or("");
+                    if line.contains("- [ ] ") {
+                        self.cursor = idx;
+                        self.ensure_cursor_visible();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Jump cursor to the previous unchecked task (`- [ ]`).
+    pub fn prev_task(&mut self) {
+        let len = self.cached_lines.len();
+        if len == 0 {
+            return;
+        }
+        for i in 1..=len {
+            let idx = (self.cursor + len - i) % len;
+            if let Some(sl) = self.cached_lines.get(idx) {
+                if let Some(src) = sl.source_line {
+                    let line = self.content.lines().nth(src).unwrap_or("");
+                    if line.contains("- [ ] ") {
+                        self.cursor = idx;
+                        self.ensure_cursor_visible();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn toggle_filter_tasks(&mut self) {
+        self.filter_tasks = !self.filter_tasks;
+        self.cursor = 0;
+        self.scroll = 0;
     }
 
     pub fn open_search(&mut self) {
@@ -303,4 +388,46 @@ impl AppState {
             self.scroll = line.saturating_sub(self.visible_height / 3);
         }
     }
+}
+
+/// Filter parsed lines to only unchecked tasks and their heading context.
+/// All headings are shown. A blank line separates each section.
+fn filter_task_lines(lines: Vec<StyledLine<'static>>) -> Vec<StyledLine<'static>> {
+    let mut result: Vec<StyledLine<'static>> = Vec::new();
+
+    for sl in lines {
+        if sl.is_heading {
+            // Ensure a blank line before each heading (except the first)
+            if !result.is_empty() && !result.last().map_or(true, |l| l.is_blank) {
+                result.push(StyledLine {
+                    line: ratatui::text::Line::default(),
+                    is_blank: true,
+                    is_heading: false,
+                    source_line: None,
+                });
+            }
+            result.push(sl);
+            // Blank line after heading
+            result.push(StyledLine {
+                line: ratatui::text::Line::default(),
+                is_blank: true,
+                is_heading: false,
+                source_line: None,
+            });
+        } else if sl.source_line.is_some() {
+            // Check the marker span (first span) for unchecked status
+            let is_unchecked = sl.line.spans.first()
+                .map_or(false, |s| s.content.contains("[ ]"));
+            if is_unchecked {
+                result.push(sl);
+            }
+        }
+    }
+
+    // Remove trailing blank lines
+    while result.last().map_or(false, |l| l.is_blank) {
+        result.pop();
+    }
+
+    result
 }

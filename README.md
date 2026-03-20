@@ -46,6 +46,8 @@ mdr <file.md>
 | `g` / `Home` | Go to top |
 | `G` / `End` | Go to bottom |
 | `x` / `Space` | Toggle task checkbox |
+| `Tab` / `Shift-Tab` | Next / previous unchecked task |
+| `F` | Toggle task filter view |
 | `/` | Search |
 | `n` / `N` | Next/previous match |
 | `f` | File picker |
@@ -58,7 +60,14 @@ mdr <file.md>
 
 synthwave, monochrome, ocean, sunset, matrix, tokyo night moon
 
-Selected theme persists across sessions in `~/.config/mdr/config.toml`.
+### Configuration
+
+Settings are stored in `~/.config/mdr/config.toml`:
+
+```toml
+theme = "tokyo night moon"
+scrollbar = true
+```
 
 ## Requirements
 

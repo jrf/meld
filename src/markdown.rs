@@ -8,6 +8,7 @@ use crate::theme::Theme;
 pub struct StyledLine<'a> {
     pub line: Line<'a>,
     pub is_blank: bool,
+    pub is_heading: bool,
     /// Source line number for task list items (used for checkbox toggling)
     pub source_line: Option<usize>,
 }
@@ -80,7 +81,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
             },
             Event::End(tag_end) => match tag_end {
                 TagEnd::Heading(_) => {
-                    flush_line(&mut lines, &mut current_spans, None);
+                    flush_line_heading(&mut lines, &mut current_spans);
                     push_blank(&mut lines);
                     in_heading = None;
                 }
@@ -132,6 +133,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                             Style::default().fg(theme.border),
                         )),
                         is_blank: false,
+                        is_heading: false,
                         source_line: None,
                     });
                 }
@@ -295,6 +297,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                         Style::default().fg(theme.border),
                     )),
                     is_blank: false,
+                    is_heading: false,
                     source_line: None,
                 });
                 push_blank(&mut lines);
@@ -352,6 +355,7 @@ fn emit_table_row(
     lines.push(StyledLine {
         line: Line::from(spans),
         is_blank: false,
+        is_heading: false,
         source_line: None,
     });
 }
@@ -364,6 +368,7 @@ fn push_blank(lines: &mut Vec<StyledLine<'static>>) {
     lines.push(StyledLine {
         line: Line::default(),
         is_blank: true,
+        is_heading: false,
         source_line: None,
     });
 }
@@ -380,6 +385,23 @@ fn flush_line(
     lines.push(StyledLine {
         line,
         is_blank: false,
+        is_heading: false,
         source_line,
+    });
+}
+
+fn flush_line_heading(
+    lines: &mut Vec<StyledLine<'static>>,
+    spans: &mut Vec<Span<'static>>,
+) {
+    if spans.is_empty() {
+        return;
+    }
+    let line = Line::from(std::mem::take(spans));
+    lines.push(StyledLine {
+        line,
+        is_blank: false,
+        is_heading: true,
+        source_line: None,
     });
 }

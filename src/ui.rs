@@ -1,7 +1,7 @@
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -43,7 +43,7 @@ fn render_entry_list(
         .skip(scroll)
         .take(visible_height)
         .map(|(_, (entry, is_selected))| {
-            let prefix = if *is_selected { " > " } else { "   " };
+            let prefix = "   ";
 
             let icon = if entry.name == ".." {
                 "^ "
@@ -56,6 +56,7 @@ fn render_entry_list(
             let style = if *is_selected {
                 Style::default()
                     .fg(theme.text_bright)
+                    .bg(theme.cursor_bg)
                     .add_modifier(Modifier::BOLD)
             } else if entry.name == ".." {
                 Style::default().fg(theme.text_dim)
@@ -65,11 +66,22 @@ fn render_entry_list(
                 Style::default().fg(theme.text)
             };
 
-            Line::from(vec![
+            let mut line = Line::from(vec![
                 Span::styled(prefix, style),
                 Span::styled(icon, style),
                 Span::styled(entry.name.as_str(), style),
-            ])
+            ]);
+            if *is_selected {
+                let content_width: usize = line.spans.iter().map(|s| s.content.width()).sum();
+                let area_width = area.width as usize;
+                if content_width < area_width {
+                    line.spans.push(Span::styled(
+                        " ".repeat(area_width - content_width),
+                        Style::default().bg(theme.cursor_bg),
+                    ));
+                }
+            }
+            line
         })
         .collect();
 
@@ -143,6 +155,19 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
 
     f.render_widget(Paragraph::new(visible), content_area);
 
+    // Scrollbar
+    if state.scrollbar && total_lines > visible_height {
+        let mut scrollbar_state = ScrollbarState::new(total_lines.saturating_sub(visible_height))
+            .position(scroll);
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .thumb_style(Style::default().fg(theme.text_dim))
+                .track_style(Style::default().fg(theme.border)),
+            content_area,
+            &mut scrollbar_state,
+        );
+    }
+
     // Status bar
     let filename = state
         .file_path
@@ -197,6 +222,22 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
                 Style::default().fg(theme.text_muted),
             ),
         ];
+
+        if state.filter_tasks {
+            status_spans.push(Span::styled(" │ ", Style::default().fg(theme.border)));
+            status_spans.push(Span::styled(
+                "[filter]",
+                Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        if state.file_updated {
+            status_spans.push(Span::styled(" │ ", Style::default().fg(theme.border)));
+            status_spans.push(Span::styled(
+                "[updated]",
+                Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+            ));
+        }
 
         if !state.search_query.is_empty() {
             status_spans.push(Span::styled(" │ ", Style::default().fg(theme.border)));
@@ -375,11 +416,23 @@ fn draw_theme_picker(f: &mut Frame, state: &AppState) {
             let style = if is_selected {
                 Style::default()
                     .fg(theme.text_bright)
+                    .bg(theme.cursor_bg)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(theme.text)
             };
-            Line::from(Span::styled(format!("{}{}", prefix, name), style))
+            let mut line = Line::from(Span::styled(format!("{}{}", prefix, name), style));
+            if is_selected {
+                let content_width: usize = line.spans.iter().map(|s| s.content.width()).sum();
+                let area_width = chunks[0].width as usize;
+                if content_width < area_width {
+                    line.spans.push(Span::styled(
+                        " ".repeat(area_width - content_width),
+                        Style::default().bg(theme.cursor_bg),
+                    ));
+                }
+            }
+            line
         })
         .collect();
 
@@ -404,6 +457,8 @@ fn draw_help(f: &mut Frame, state: &AppState) {
         ("g / Home",     "Go to top"),
         ("G / End",      "Go to bottom"),
         ("x / Space",    "Toggle task checkbox"),
+        ("Tab / S-Tab",  "Next / previous unchecked task"),
+        ("F",            "Toggle task filter view"),
         ("Enter",        "Open file"),
         ("/",            "Search"),
         ("n / N",        "Next / previous match"),
