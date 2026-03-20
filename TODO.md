@@ -6,6 +6,8 @@
 
 ## Next
 
+- [ ] Outline-aware folding — collapse/expand sections by heading level
+
 ## Later
 
 - [ ] Syntax highlighting in fenced code blocks (syntect or tree-sitter)
@@ -15,6 +17,8 @@
 - [ ] Table of contents overlay — list headings, jump to any section
 - [ ] Inline image rendering via Sixel (with fallback to `[image: alt text]` placeholder)
 - [ ] Footnote rendering
+- [ ] Multiple file tabs — open several files, switch without the picker
+- [ ] Bookmarks — mark positions in a file, jump back to them
 - [ ] Tidy command — keybind to move completed `[x]` tasks to a "Done" section
 
 ## Done
