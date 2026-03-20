@@ -113,8 +113,9 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
 
     // Content area
     let content_area = chunks[0];
-    let parsed = state.get_parsed_lines(content_area.width);
-    let total_lines = parsed.len();
+    let _parsed = state.get_parsed_lines(content_area.width);
+    let display_indices = state.visible_line_indices();
+    let total_lines = display_indices.len();
     let visible_height = content_area.height as usize;
 
     state.total_lines = total_lines;
@@ -123,16 +124,31 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
     let scroll = state.scroll.min(total_lines.saturating_sub(visible_height));
     let cursor = state.cursor;
 
-    let visible: Vec<Line> = state.cached_lines[scroll..]
+    let visible: Vec<Line> = display_indices[scroll..]
         .iter()
         .enumerate()
         .take(visible_height)
-        .map(|(i, sl)| {
+        .map(|(i, &line_idx)| {
+            let sl = &state.cached_lines[line_idx];
             let mut line = if state.search_query.is_empty() {
                 sl.line.clone()
             } else {
                 highlight_search(sl.line.clone(), &state.search_query, theme)
             };
+            // Add fold indicator for headings
+            if sl.is_heading {
+                if let Some(ref text) = sl.heading_text {
+                    let indicator = if state.folded_headings.contains(text) {
+                        "▶ "
+                    } else {
+                        "▼ "
+                    };
+                    line.spans.insert(0, Span::styled(
+                        indicator.to_string(),
+                        Style::default().fg(theme.text_dim),
+                    ));
+                }
+            }
             // Highlight cursor line with a subtle background
             if scroll + i == cursor {
                 let cursor_style = Style::default().bg(theme.cursor_bg);
@@ -456,10 +472,10 @@ fn draw_help(f: &mut Frame, state: &AppState) {
         ("Ctrl-b",       "Page up"),
         ("g / Home",     "Go to top"),
         ("G / End",      "Go to bottom"),
+        ("Enter",        "Fold/unfold section"),
         ("x / Space",    "Toggle task checkbox"),
         ("Tab / S-Tab",  "Next / previous unchecked task"),
         ("F",            "Toggle task filter view"),
-        ("Enter",        "Open file"),
         ("/",            "Search"),
         ("n / N",        "Next / previous match"),
         ("f",            "File picker"),

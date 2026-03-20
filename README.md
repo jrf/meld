@@ -45,6 +45,7 @@ mdr <file.md>
 | `Ctrl-b` / `PageUp` | Page up |
 | `g` / `Home` | Go to top |
 | `G` / `End` | Go to bottom |
+| `Enter` | Fold/unfold section |
 | `x` / `Space` | Toggle task checkbox |
 | `Tab` / `Shift-Tab` | Next / previous unchecked task |
 | `F` | Toggle task filter view |

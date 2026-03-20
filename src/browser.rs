@@ -220,6 +220,10 @@ impl BrowserState {
         self.scroll_offset = 0;
     }
 
+    pub fn preload_recursive(&mut self) {
+        self.ensure_recursive_loaded();
+    }
+
     fn ensure_recursive_loaded(&mut self) {
         if self.recursive_loaded {
             return;

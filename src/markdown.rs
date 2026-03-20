@@ -9,6 +9,8 @@ pub struct StyledLine<'a> {
     pub line: Line<'a>,
     pub is_blank: bool,
     pub is_heading: bool,
+    pub heading_level: Option<u8>,
+    pub heading_text: Option<String>,
     /// Source line number for task list items (used for checkbox toggling)
     pub source_line: Option<usize>,
 }
@@ -27,6 +29,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
     let mut italic = false;
     let mut strikethrough = false;
     let mut in_heading: Option<u8> = None;
+    let mut heading_text_buf = String::new();
     let mut in_code_block = false;
     let mut in_blockquote = false;
     let mut in_list_item = false;
@@ -81,7 +84,9 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
             },
             Event::End(tag_end) => match tag_end {
                 TagEnd::Heading(_) => {
-                    flush_line_heading(&mut lines, &mut current_spans);
+                    let level = in_heading.unwrap_or(1);
+                    let text = std::mem::take(&mut heading_text_buf);
+                    flush_line_heading(&mut lines, &mut current_spans, level, text);
                     push_blank(&mut lines);
                     in_heading = None;
                 }
@@ -134,6 +139,8 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                         )),
                         is_blank: false,
                         is_heading: false,
+                        heading_level: None,
+                        heading_text: None,
                         source_line: None,
                     });
                 }
@@ -146,6 +153,9 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
             },
             Event::Text(text) => {
                 let text = text.into_string();
+                if in_heading.is_some() {
+                    heading_text_buf.push_str(&text);
+                }
 
                 if in_table {
                     table_row.push(text);
@@ -298,6 +308,8 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                     )),
                     is_blank: false,
                     is_heading: false,
+                    heading_level: None,
+                    heading_text: None,
                     source_line: None,
                 });
                 push_blank(&mut lines);
@@ -356,6 +368,8 @@ fn emit_table_row(
         line: Line::from(spans),
         is_blank: false,
         is_heading: false,
+        heading_level: None,
+        heading_text: None,
         source_line: None,
     });
 }
@@ -369,6 +383,8 @@ fn push_blank(lines: &mut Vec<StyledLine<'static>>) {
         line: Line::default(),
         is_blank: true,
         is_heading: false,
+        heading_level: None,
+        heading_text: None,
         source_line: None,
     });
 }
@@ -386,6 +402,8 @@ fn flush_line(
         line,
         is_blank: false,
         is_heading: false,
+        heading_level: None,
+        heading_text: None,
         source_line,
     });
 }
@@ -393,6 +411,8 @@ fn flush_line(
 fn flush_line_heading(
     lines: &mut Vec<StyledLine<'static>>,
     spans: &mut Vec<Span<'static>>,
+    level: u8,
+    text: String,
 ) {
     if spans.is_empty() {
         return;
@@ -402,6 +422,8 @@ fn flush_line_heading(
         line,
         is_blank: false,
         is_heading: true,
+        heading_level: Some(level),
+        heading_text: Some(text),
         source_line: None,
     });
 }

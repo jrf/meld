@@ -6,8 +6,6 @@
 
 ## Next
 
-- [ ] Outline-aware folding — collapse/expand sections by heading level
-
 ## Later
 
 - [ ] Syntax highlighting in fenced code blocks (syntect or tree-sitter)
@@ -40,3 +38,4 @@
 - [x] Mouse scroll support (scrolls viewport, clamps cursor)
 - [x] Scrollbar widget (configurable via `scrollbar` in config.toml)
 - [x] Fuzzy search/filter in file picker
+- [x] Outline-aware folding — `Enter` to collapse/expand sections by heading

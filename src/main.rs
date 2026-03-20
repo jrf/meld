@@ -151,6 +151,7 @@ fn main() -> io::Result<()> {
                                     KeyCode::Char('f') if !ctrl => {
                                         state.browser.filter.clear();
                                         state.browser.rebuild_filter();
+                                        state.browser.preload_recursive();
                                         state.mode = AppMode::FilePicker;
                                     }
                                     KeyCode::Char('F') => state.toggle_filter_tasks(),
@@ -175,6 +176,7 @@ fn main() -> io::Result<()> {
                                             }
                                         }
                                     }
+                                    KeyCode::Enter => state.toggle_fold(),
                                     KeyCode::Char('x') | KeyCode::Char(' ') => {
                                         state.toggle_checkbox();
                                     }

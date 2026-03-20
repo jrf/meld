@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -29,6 +30,7 @@ pub struct AppState {
     pub cursor: usize,
     pub file_updated: bool,
     pub filter_tasks: bool,
+    pub folded_headings: HashSet<String>,
     pub search_query: String,
     pub search_matches: Vec<usize>,
     pub search_current: usize,
@@ -54,6 +56,7 @@ impl AppState {
             theme_index,
             file_updated: false,
             filter_tasks: false,
+            folded_headings: HashSet::new(),
             search_query: String::new(),
             search_matches: Vec::new(),
             search_current: 0,
@@ -84,6 +87,7 @@ impl AppState {
             theme_index,
             file_updated: false,
             filter_tasks: false,
+            folded_headings: HashSet::new(),
             search_query: String::new(),
             search_matches: Vec::new(),
             search_current: 0,
@@ -228,7 +232,11 @@ impl AppState {
     /// Toggle the checkbox on the line under the cursor.
     /// Returns true if a toggle was performed.
     pub fn toggle_checkbox(&mut self) -> bool {
-        let source_line = match self.cached_lines.get(self.cursor) {
+        let idx = match self.cursor_line_idx() {
+            Some(i) => i,
+            None => return false,
+        };
+        let source_line = match self.cached_lines.get(idx) {
             Some(sl) => match sl.source_line {
                 Some(n) => n,
                 None => return false,
@@ -279,15 +287,20 @@ impl AppState {
 
     /// Jump cursor to the next unchecked task (`- [ ]`).
     pub fn next_task(&mut self) {
+        let indices = self.visible_line_indices();
+        let len = indices.len();
+        if len == 0 {
+            return;
+        }
         let start = self.cursor + 1;
-        let len = self.cached_lines.len();
         for i in 0..len {
-            let idx = (start + i) % len;
-            if let Some(sl) = self.cached_lines.get(idx) {
+            let display_idx = (start + i) % len;
+            let line_idx = indices[display_idx];
+            if let Some(sl) = self.cached_lines.get(line_idx) {
                 if let Some(src) = sl.source_line {
                     let line = self.content.lines().nth(src).unwrap_or("");
                     if line.contains("- [ ] ") {
-                        self.cursor = idx;
+                        self.cursor = display_idx;
                         self.ensure_cursor_visible();
                         return;
                     }
@@ -298,23 +311,85 @@ impl AppState {
 
     /// Jump cursor to the previous unchecked task (`- [ ]`).
     pub fn prev_task(&mut self) {
-        let len = self.cached_lines.len();
+        let indices = self.visible_line_indices();
+        let len = indices.len();
         if len == 0 {
             return;
         }
         for i in 1..=len {
-            let idx = (self.cursor + len - i) % len;
-            if let Some(sl) = self.cached_lines.get(idx) {
+            let display_idx = (self.cursor + len - i) % len;
+            let line_idx = indices[display_idx];
+            if let Some(sl) = self.cached_lines.get(line_idx) {
                 if let Some(src) = sl.source_line {
                     let line = self.content.lines().nth(src).unwrap_or("");
                     if line.contains("- [ ] ") {
-                        self.cursor = idx;
+                        self.cursor = display_idx;
                         self.ensure_cursor_visible();
                         return;
                     }
                 }
             }
         }
+    }
+
+    /// Map display cursor position to cached_lines index.
+    fn cursor_line_idx(&self) -> Option<usize> {
+        let indices = self.visible_line_indices();
+        indices.get(self.cursor).copied()
+    }
+
+    /// Toggle fold state for the heading under the cursor.
+    pub fn toggle_fold(&mut self) {
+        if let Some(idx) = self.cursor_line_idx() {
+            if let Some(sl) = self.cached_lines.get(idx) {
+                if let Some(ref text) = sl.heading_text {
+                    if !self.folded_headings.remove(text) {
+                        self.folded_headings.insert(text.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Returns indices into cached_lines that should be displayed (respecting folds).
+    pub fn visible_line_indices(&self) -> Vec<usize> {
+        if self.folded_headings.is_empty() {
+            return (0..self.cached_lines.len()).collect();
+        }
+
+        let mut indices = Vec::new();
+        let mut skip_until_level: Option<u8> = None;
+        let mut kept_blank_after_fold = false;
+
+        for (i, sl) in self.cached_lines.iter().enumerate() {
+            if let Some(level) = sl.heading_level {
+                if let Some(fold_level) = skip_until_level {
+                    if level <= fold_level {
+                        skip_until_level = None;
+                        kept_blank_after_fold = false;
+                    } else {
+                        continue;
+                    }
+                }
+                indices.push(i);
+                if let Some(ref text) = sl.heading_text {
+                    if self.folded_headings.contains(text) {
+                        skip_until_level = Some(level);
+                        kept_blank_after_fold = false;
+                    }
+                }
+            } else if skip_until_level.is_some() {
+                // Keep one blank line after the folded heading for spacing
+                if sl.is_blank && !kept_blank_after_fold {
+                    indices.push(i);
+                    kept_blank_after_fold = true;
+                }
+            } else {
+                indices.push(i);
+            }
+        }
+
+        indices
     }
 
     pub fn toggle_filter_tasks(&mut self) {
@@ -403,6 +478,8 @@ fn filter_task_lines(lines: Vec<StyledLine<'static>>) -> Vec<StyledLine<'static>
                     line: ratatui::text::Line::default(),
                     is_blank: true,
                     is_heading: false,
+                    heading_level: None,
+                    heading_text: None,
                     source_line: None,
                 });
             }
@@ -412,6 +489,8 @@ fn filter_task_lines(lines: Vec<StyledLine<'static>>) -> Vec<StyledLine<'static>
                 line: ratatui::text::Line::default(),
                 is_blank: true,
                 is_heading: false,
+                heading_level: None,
+                heading_text: None,
                 source_line: None,
             });
         } else if sl.source_line.is_some() {
