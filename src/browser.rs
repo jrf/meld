@@ -1,59 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
 
-/// Fuzzy match with scoring. Returns None if no match, Some(score) if matched.
-/// Higher score = better match.
-fn fuzzy_score(text: &str, query: &str) -> Option<i32> {
-    let text_chars: Vec<char> = text.chars().collect();
-    let query_chars: Vec<char> = query.chars().collect();
-
-    if query_chars.is_empty() {
-        return Some(0);
-    }
-
-    let mut score: i32 = 0;
-    let mut ti = 0;
-    let mut prev_match_idx: Option<usize> = None;
-
-    for &qc in &query_chars {
-        let mut found = false;
-        while ti < text_chars.len() {
-            if text_chars[ti] == qc {
-                // Consecutive match bonus
-                if let Some(prev) = prev_match_idx {
-                    if ti == prev + 1 {
-                        score += 10;
-                    }
-                }
-                // Word boundary bonus (start of text, after '/', '-', '_', '.')
-                if ti == 0 || matches!(text_chars[ti - 1], '/' | '-' | '_' | '.') {
-                    score += 8;
-                }
-                // Penalty for gap
-                if let Some(prev) = prev_match_idx {
-                    let gap = ti - prev - 1;
-                    score -= gap as i32;
-                } else {
-                    // Penalty for late first match
-                    score -= ti as i32;
-                }
-                prev_match_idx = Some(ti);
-                ti += 1;
-                found = true;
-                break;
-            }
-            ti += 1;
-        }
-        if !found {
-            return None;
-        }
-    }
-
-    // Bonus for shorter text (prefer tighter matches)
-    score -= (text_chars.len() as i32) / 4;
-
-    Some(score)
-}
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config, Matcher, Utf32Str};
 
 /// Find the git repository root, if any.
 fn find_git_root(start: &Path) -> Option<PathBuf> {
@@ -139,10 +90,11 @@ pub struct BrowserState {
     pub scroll_offset: usize,
     pub filter: String,
     pub filtered_indices: Vec<usize>,
-    /// Cached recursive .md files from git root (populated on first filter use)
+    /// Cached recursive .md files from git root
     recursive_entries: Vec<BrowserEntry>,
-    recursive_root: Option<PathBuf>,
     recursive_loaded: bool,
+    /// Receiver for background recursive file collection
+    recursive_rx: Option<mpsc::Receiver<Vec<BrowserEntry>>>,
 }
 
 impl BrowserState {
@@ -155,8 +107,9 @@ impl BrowserState {
             filter: String::new(),
             filtered_indices: Vec::new(),
             recursive_entries: Vec::new(),
-            recursive_root: None,
+
             recursive_loaded: false,
+            recursive_rx: None,
         };
         state.load_dir();
         state
@@ -166,6 +119,7 @@ impl BrowserState {
         self.entries.clear();
         self.filter.clear();
         self.recursive_loaded = false;
+        self.recursive_rx = None;
 
         // Add parent directory entry
         if let Some(parent) = self.current_dir.parent() {
@@ -220,60 +174,82 @@ impl BrowserState {
         self.scroll_offset = 0;
     }
 
+    /// Kick off background collection of recursive .md files.
     pub fn preload_recursive(&mut self) {
-        self.ensure_recursive_loaded();
-    }
-
-    fn ensure_recursive_loaded(&mut self) {
-        if self.recursive_loaded {
+        if self.recursive_loaded || self.recursive_rx.is_some() {
             return;
         }
-        self.recursive_loaded = true;
-        self.recursive_entries.clear();
+        let dir = self.current_dir.clone();
+        let (tx, rx) = mpsc::channel();
+        self.recursive_rx = Some(rx);
+        thread::spawn(move || {
+            let root = find_git_root(&dir).unwrap_or(dir);
+            let entries: Vec<BrowserEntry> = collect_md_files(&root)
+                .into_iter()
+                .map(|(rel, path)| BrowserEntry {
+                    name: rel,
+                    path,
+                    is_dir: false,
+                })
+                .collect();
+            let _ = tx.send(entries);
+        });
+    }
 
-        let root = find_git_root(&self.current_dir)
-            .unwrap_or_else(|| self.current_dir.clone());
-        let files = collect_md_files(&root);
-
-        self.recursive_entries = files
-            .into_iter()
-            .map(|(rel, path)| BrowserEntry {
-                name: rel,
-                path,
-                is_dir: false,
-            })
-            .collect();
-        self.recursive_root = Some(root);
+    /// Check if background results are ready; returns true if new data arrived.
+    pub fn poll_recursive(&mut self) -> bool {
+        if let Some(ref rx) = self.recursive_rx {
+            if let Ok(entries) = rx.try_recv() {
+                self.recursive_entries = entries;
+                self.recursive_loaded = true;
+                self.recursive_rx = None;
+                // Re-filter with the new data if there's an active filter
+                if !self.filter.is_empty() {
+                    self.rebuild_filter();
+                }
+                return true;
+            }
+        }
+        false
     }
 
     pub fn rebuild_filter(&mut self) {
         if self.filter.is_empty() {
             self.filtered_indices = (0..self.entries.len()).collect();
-        } else {
-            self.ensure_recursive_loaded();
-            let query = self.filter.to_lowercase();
-            let mut scored: Vec<(usize, i32)> = self
-                .recursive_entries
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| {
-                    fuzzy_score(&e.name.to_lowercase(), &query).map(|s| (i, s))
-                })
-                .collect();
-            scored.sort_by(|a, b| b.1.cmp(&a.1));
-            self.filtered_indices = scored.into_iter().map(|(i, _)| i).collect();
+            return;
         }
+
+        let pattern = Pattern::parse(
+            &self.filter,
+            CaseMatching::Ignore,
+            Normalization::Smart,
+        );
+        let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
+        let mut buf = Vec::new();
+
+        // Use recursive entries if loaded, otherwise fall back to local entries
+        let source = if self.recursive_loaded {
+            &self.recursive_entries
+        } else {
+            &self.entries
+        };
+        let mut scored: Vec<(usize, u32)> = source
+            .iter()
+            .enumerate()
+            .filter_map(|(i, e)| {
+                let haystack = Utf32Str::new(&e.name, &mut buf);
+                pattern.score(haystack, &mut matcher).map(|s| (i, s))
+            })
+            .collect();
+        scored.sort_by(|a, b| b.1.cmp(&a.1));
+        self.filtered_indices = scored.into_iter().map(|(i, _)| i).collect();
     }
 
     pub fn filtered_entries(&self) -> Vec<(usize, &BrowserEntry)> {
-        let source = if self.filter.is_empty() {
-            &self.entries
-        } else {
-            &self.recursive_entries
-        };
+        let source = self.active_source();
         self.filtered_indices
             .iter()
-            .map(|&i| (i, &source[i]))
+            .filter_map(|&i| source.get(i).map(|e| (i, e)))
             .collect()
     }
 
@@ -290,12 +266,7 @@ impl BrowserState {
     /// Returns Some(path) if a markdown file was selected, None if navigated into a directory.
     pub fn enter_selected(&mut self) -> Option<PathBuf> {
         let &real_index = self.filtered_indices.get(self.selected)?;
-        let source = if self.filter.is_empty() {
-            &self.entries
-        } else {
-            &self.recursive_entries
-        };
-        let entry = &source[real_index];
+        let entry = self.active_source().get(real_index)?;
         if entry.is_dir {
             self.current_dir = entry.path.clone();
             self.load_dir();
@@ -305,29 +276,28 @@ impl BrowserState {
         }
     }
 
+    fn active_source(&self) -> &Vec<BrowserEntry> {
+        if !self.filter.is_empty() && self.recursive_loaded {
+            &self.recursive_entries
+        } else {
+            &self.entries
+        }
+    }
+
     /// Reload directory contents, preserving filter and selection.
     pub fn refresh(&mut self) {
         let old_filter = self.filter.clone();
-        let source = if self.filter.is_empty() {
-            &self.entries
-        } else {
-            &self.recursive_entries
-        };
         let selected_name = self
             .filtered_indices
             .get(self.selected)
-            .and_then(|&i| source.get(i))
+            .and_then(|&i| self.active_source().get(i))
             .map(|e| e.name.clone());
 
         self.load_dir();
         self.filter = old_filter;
         self.rebuild_filter();
 
-        let source = if self.filter.is_empty() {
-            &self.entries
-        } else {
-            &self.recursive_entries
-        };
+        let source = self.active_source();
         if let Some(name) = selected_name {
             if let Some(pos) = self
                 .filtered_indices

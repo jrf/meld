@@ -123,6 +123,11 @@ fn main() -> io::Result<()> {
             }
         }
 
+        // Check if background recursive file list is ready
+        if state.browser.poll_recursive() {
+            needs_redraw = true;
+        }
+
         // Check for directory changes (refresh file picker entries)
         if dir_dirty.swap(false, Ordering::Relaxed) {
             state.browser.refresh();
