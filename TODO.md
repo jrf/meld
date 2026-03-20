@@ -13,7 +13,7 @@
 - [ ] Follow markdown links — open URLs in browser, jump to local `.md` files
 - [ ] Browser preview pane (split layout showing selected file)
 - [ ] Table of contents overlay — list headings, jump to any section
-- [ ] Image placeholders — show `[image: alt text]` for images
+- [ ] Inline image rendering via Sixel (with fallback to `[image: alt text]` placeholder)
 - [ ] Footnote rendering
 - [ ] Tidy command — keybind to move completed `[x]` tasks to a "Done" section
 
