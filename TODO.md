@@ -12,6 +12,8 @@
 - [ ] Accept stdin (`cat file.md | mdr`)
 - [ ] Follow markdown links — open URLs in browser, jump to local `.md` files
 - [ ] Browser preview pane (split layout showing selected file)
+- [ ] Table of contents overlay — list headings, jump to any section
+- [ ] Image placeholders — show `[image: alt text]` for images
 - [ ] Footnote rendering
 - [ ] Tidy command — keybind to move completed `[x]` tasks to a "Done" section
 
