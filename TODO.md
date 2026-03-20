@@ -7,7 +7,6 @@
 
 ## Next
 
-- [ ] Syntax highlighting in fenced code blocks (syntect or tree-sitter) #feature
 - [ ] Accept stdin (`cat file.md | mdr`) #feature
 - [ ] Follow markdown links — open URLs in browser, jump to local `.md` files #feature
 - [ ] Table of contents overlay — list headings, jump to any section #feature
@@ -26,6 +25,7 @@
 - [x] Fold all / unfold all with `[` / `]` #feature
 - [x] Independent section folding — each heading folds its own content #improvement
 - [x] `q` closes tab, quits on last tab #improvement
+- [x] Syntax highlighting in fenced code blocks via syntect #feature
 - [x] Configurable themes — per-file TOML with named color palettes #feature
 - [x] Category label colors in theme config #feature
 - [x] Themes loaded from `~/.config/mdr/themes/*.toml` #feature

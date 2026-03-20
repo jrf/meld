@@ -1,9 +1,46 @@
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
 use unicode_width::UnicodeWidthStr;
 
 use crate::theme::Theme;
+
+fn syntect_highlight(code: &str, lang: &str, _theme: &Theme) -> Vec<Vec<Span<'static>>> {
+    let ss = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+    let syntax = ss
+        .find_syntax_by_token(lang)
+        .unwrap_or_else(|| ss.find_syntax_plain_text());
+    let syn_theme = &ts.themes["base16-ocean.dark"];
+
+    let mut highlighter = syntect::easy::HighlightLines::new(syntax, syn_theme);
+    let mut result = Vec::new();
+
+    for line in syntect::util::LinesWithEndings::from(code) {
+        let ranges = highlighter.highlight_line(line, &ss).unwrap_or_default();
+        let spans: Vec<Span<'static>> = ranges
+            .into_iter()
+            .map(|(style, text)| {
+                let fg = Color::Rgb(style.foreground.r, style.foreground.g, style.foreground.b);
+                Span::styled(
+                    text.trim_end_matches('\n').to_string(),
+                    Style::default().fg(fg),
+                )
+            })
+            .collect();
+        result.push(spans);
+    }
+
+    // If code doesn't end with newline, we still got all lines
+    // If it's empty, return one empty line
+    if result.is_empty() {
+        result.push(Vec::new());
+    }
+
+    result
+}
 
 #[allow(dead_code)]
 pub struct StyledLine<'a> {
@@ -51,6 +88,8 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
     let mut in_heading: Option<u8> = None;
     let mut heading_text_buf = String::new();
     let mut in_code_block = false;
+    let mut code_block_lang = String::new();
+    let mut code_block_buf = String::new();
     let mut in_blockquote = false;
     let mut in_list_item = false;
     // Stack of (ordered_start, next_number) for nested lists
@@ -72,8 +111,13 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                     in_heading = Some(level as u8);
                 }
                 Tag::Paragraph => {}
-                Tag::CodeBlock(_) => {
+                Tag::CodeBlock(kind) => {
                     in_code_block = true;
+                    code_block_buf.clear();
+                    code_block_lang = match kind {
+                        CodeBlockKind::Fenced(lang) => lang.split_whitespace().next().unwrap_or("").to_string(),
+                        CodeBlockKind::Indented => String::new(),
+                    };
                 }
                 Tag::BlockQuote(_) => {
                     in_blockquote = true;
@@ -118,6 +162,24 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                 }
                 TagEnd::CodeBlock => {
                     in_code_block = false;
+                    // Emit highlighted code lines
+                    let highlighted = syntect_highlight(&code_block_buf, &code_block_lang, &theme);
+                    for spans in highlighted {
+                        let mut line_spans = vec![Span::styled(
+                            "  ".to_string(),
+                            Style::default().fg(theme.text_muted),
+                        )];
+                        line_spans.extend(spans);
+                        lines.push(StyledLine {
+                            line: Line::from(line_spans),
+                            is_blank: false,
+                            is_heading: false,
+                            heading_level: None,
+                            heading_text: None,
+                            source_line: None,
+                            tags: Vec::new(),
+                        });
+                    }
                     push_blank(&mut lines);
                 }
                 TagEnd::BlockQuote(_) => {
@@ -178,6 +240,11 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                     heading_text_buf.push_str(&text);
                 }
 
+                if in_code_block {
+                    code_block_buf.push_str(&text);
+                    continue;
+                }
+
                 if in_table {
                     table_row.push(text);
                     continue;
@@ -190,8 +257,6 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                         _ => theme.text_bright,
                     };
                     Style::default().fg(color).add_modifier(Modifier::BOLD)
-                } else if in_code_block {
-                    Style::default().fg(theme.text_dim)
                 } else {
                     let mut s = Style::default().fg(theme.text);
                     if bold {
@@ -206,16 +271,7 @@ pub fn parse_markdown(source: &str, theme: Theme, width: u16) -> Vec<StyledLine<
                     s
                 };
 
-                if in_code_block {
-                    for line_text in text.lines() {
-                        current_spans.push(Span::styled(
-                            "  ".to_string(),
-                            Style::default().fg(theme.text_muted),
-                        ));
-                        current_spans.push(Span::styled(line_text.to_string(), style));
-                        flush_line(&mut lines, &mut current_spans, None, &mut current_tags);
-                    }
-                } else if in_blockquote {
+                if in_blockquote {
                     current_spans.push(Span::styled(
                         "  │ ".to_string(),
                         Style::default().fg(theme.border),
