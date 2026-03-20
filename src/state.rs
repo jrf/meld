@@ -71,7 +71,7 @@ pub enum AppMode {
     Search,
     FilePicker,
     ThemePicker { original_index: usize },
-    FilterPicker { picker: PickerState<String> },
+    FilterPicker { picker: PickerState<String>, filter: String },
     TableOfContents { picker: PickerState<(String, usize, u8)> },
     BookmarkList { picker: PickerState<(usize, String)> },
     Help,
@@ -747,11 +747,41 @@ impl AppState {
         } else {
             0
         };
-        self.mode = AppMode::FilterPicker { picker: PickerState::new(options, selected) };
+        self.mode = AppMode::FilterPicker {
+            picker: PickerState::new(options, selected),
+            filter: String::new(),
+        };
+    }
+
+    /// Rebuild the filter picker items based on the current filter string.
+    pub fn update_label_filter(&mut self) {
+        if let AppMode::FilterPicker { ref mut picker, ref filter } = self.mode {
+            let tags = self.tabs[self.active_tab].collect_tags();
+            if filter.is_empty() {
+                let mut options = vec!["None".to_string()];
+                options.extend(tags);
+                picker.items = options;
+            } else {
+                use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+                use nucleo_matcher::{Config, Matcher, Utf32Str};
+                let pattern = Pattern::parse(filter, CaseMatching::Ignore, Normalization::Smart);
+                let mut matcher = Matcher::new(Config::DEFAULT);
+                let mut buf = Vec::new();
+                let mut scored: Vec<(String, u32)> = tags.into_iter()
+                    .filter_map(|tag| {
+                        let haystack = Utf32Str::new(&tag, &mut buf);
+                        pattern.score(haystack, &mut matcher).map(|s| (tag, s))
+                    })
+                    .collect();
+                scored.sort_by(|a, b| b.1.cmp(&a.1));
+                picker.items = scored.into_iter().map(|(t, _)| t).collect();
+            }
+            picker.selected = 0;
+        }
     }
 
     pub fn label_picker_confirm(&mut self) {
-        if let AppMode::FilterPicker { ref picker } = self.mode {
+        if let AppMode::FilterPicker { ref picker, .. } = self.mode {
             let option = picker.selected_item().cloned();
             if let Some(option) = option {
                 let tab = self.tab_mut();

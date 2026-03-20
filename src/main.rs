@@ -379,13 +379,21 @@ fn main() -> io::Result<()> {
                                     KeyCode::Esc => state.theme_picker_cancel(),
                                     _ => needs_redraw = false,
                                 },
-                                AppMode::FilterPicker { ref mut picker } => match key.code {
-                                    KeyCode::Char('j') | KeyCode::Down => picker.select_next(),
-                                    KeyCode::Char('k') | KeyCode::Up => picker.select_prev(),
+                                AppMode::FilterPicker { ref mut picker, ref mut filter } => match key.code {
+                                    KeyCode::Down => picker.select_next(),
+                                    KeyCode::Up => picker.select_prev(),
                                     KeyCode::Home => picker.select_first(),
                                     KeyCode::End => picker.select_last(),
                                     KeyCode::Enter => state.label_picker_confirm(),
-                                    KeyCode::Esc | KeyCode::Char('l') => state.label_picker_cancel(),
+                                    KeyCode::Esc => state.label_picker_cancel(),
+                                    KeyCode::Backspace => {
+                                        filter.pop();
+                                        state.update_label_filter();
+                                    }
+                                    KeyCode::Char(c) => {
+                                        filter.push(c);
+                                        state.update_label_filter();
+                                    }
                                     _ => needs_redraw = false,
                                 },
                                 AppMode::TableOfContents { ref mut picker } => match key.code {

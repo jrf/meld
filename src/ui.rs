@@ -557,15 +557,15 @@ fn draw_theme_picker(f: &mut Frame, state: &AppState) {
 }
 
 fn draw_filter_picker(f: &mut Frame, state: &AppState) {
-    let picker = match &state.mode {
-        AppMode::FilterPicker { picker } => picker,
+    let (picker, filter) = match &state.mode {
+        AppMode::FilterPicker { picker, filter } => (picker, filter),
         _ => return,
     };
     let theme = state.theme;
     let area = f.area();
     let options = &picker.items;
 
-    let height = options.len() as u16 + 4;
+    let height = options.len() as u16 + 6; // +2 for filter input + spacer
     let width = 34;
     let popup = centered_rect(width, height, area);
 
@@ -581,23 +581,32 @@ fn draw_filter_picker(f: &mut Frame, state: &AppState) {
     f.render_widget(block, popup);
 
     let chunks = Layout::vertical([
-        Constraint::Min(1),
-        Constraint::Length(1),
+        Constraint::Length(1), // filter input
+        Constraint::Min(1),   // list
+        Constraint::Length(1), // hint
     ])
     .split(inner);
 
-    let tab = state.tab();
+    // Filter input
+    let filter_line = if filter.is_empty() {
+        Line::from(Span::styled(
+            " type to filter...",
+            Style::default().fg(theme.text_muted),
+        ))
+    } else {
+        Line::from(vec![
+            Span::styled(" > ", Style::default().fg(theme.accent)),
+            Span::styled(filter.clone(), Style::default().fg(theme.text_bright)),
+        ])
+    };
+    f.render_widget(Paragraph::new(filter_line), chunks[0]);
+
     let lines: Vec<Line> = options
         .iter()
         .enumerate()
         .map(|(i, option)| {
             let is_selected = i == picker.selected;
-            let is_active = match option.as_str() {
-                "None" => tab.tag_filter.is_none(),
-                tag => tab.tag_filter.as_deref() == Some(tag),
-            };
-            let marker = if is_active { " * " } else { "   " };
-            let prefix = if is_selected { ">" } else { " " };
+            let prefix = if is_selected { " > " } else { "   " };
             let display = if option == "None" {
                 "None".to_string()
             } else {
@@ -616,10 +625,10 @@ fn draw_filter_picker(f: &mut Frame, state: &AppState) {
             } else {
                 Style::default().fg(fg)
             };
-            let mut line = Line::from(Span::styled(format!("{}{} {}", marker, prefix, display), style));
+            let mut line = Line::from(Span::styled(format!("{}{}", prefix, display), style));
             if is_selected {
                 let content_width: usize = line.spans.iter().map(|s| s.content.width()).sum();
-                let area_width = chunks[0].width as usize;
+                let area_width = chunks[1].width as usize;
                 if content_width < area_width {
                     line.spans.push(Span::styled(
                         " ".repeat(area_width - content_width),
@@ -631,13 +640,13 @@ fn draw_filter_picker(f: &mut Frame, state: &AppState) {
         })
         .collect();
 
-    f.render_widget(Paragraph::new(lines), chunks[0]);
+    f.render_widget(Paragraph::new(lines), chunks[1]);
 
     let hint = Line::from(Span::styled(
-        " j/k:select  enter:ok  esc/l:cancel",
+        " enter:ok  esc:cancel",
         Style::default().fg(theme.text_muted),
     ));
-    f.render_widget(Paragraph::new(hint), chunks[1]);
+    f.render_widget(Paragraph::new(hint), chunks[2]);
 }
 
 fn draw_toc(f: &mut Frame, state: &AppState) {
