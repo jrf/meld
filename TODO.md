@@ -2,16 +2,11 @@
 
 ## Now
 
-- [ ] Filter tasks by tag — keybind to show only lines matching a tag #feature
-- [ ] Task summary in status bar (e.g., `3/7 tasks`) #feature
-
 ## Next
 
+- [ ] Task summary in status bar (e.g., `3/7 tasks`) #feature
 - [ ] Accept stdin (`cat file.md | mdr`) #feature
-- [ ] Follow markdown links — open URLs in browser, jump to local `.md` files #feature
-- [ ] Table of contents overlay — list headings, jump to any section #feature
 - [ ] Browser preview pane (split layout showing selected file) #improvement
-- [ ] Bookmarks — mark positions in a file, jump back to them #feature
 - [ ] Inline image rendering via Sixel (with fallback to `[image: alt text]` placeholder) #feature
 - [ ] Footnote rendering #feature
 - [ ] Tidy command — keybind to move completed `[x]` tasks to a "Done" section #feature
@@ -21,6 +16,9 @@
 
 ## Done
 
+- [x] Table of contents overlay — `o` to list headings, jump to any section #feature
+- [x] Follow markdown links — Enter on `.md` links opens in tab, URLs open browser #feature
+- [x] Bookmarks — `m` to toggle, `'`/`"` to cycle #feature
 - [x] Inline `#tag` rendering with color-coded category labels #feature
 - [x] Fold all / unfold all with `[` / `]` #feature
 - [x] Independent section folding — each heading folds its own content #improvement

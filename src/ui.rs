@@ -24,6 +24,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         AppMode::FilePicker => draw_file_picker(f, state),
         AppMode::ThemePicker { .. } => draw_theme_picker(f, state),
         AppMode::FilterPicker => draw_filter_picker(f, state),
+        AppMode::TableOfContents => draw_toc(f, state),
         AppMode::Help => draw_help(f, state),
     }
 }
@@ -192,6 +193,13 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
                 highlight_search(sl.line.clone(), &tab.search_query, theme)
             };
             // Add fold indicator for headings
+            // Bookmark indicator
+            if tab.bookmarks.contains(&(scroll + i)) {
+                line.spans.insert(0, Span::styled(
+                    "● ".to_string(),
+                    Style::default().fg(theme.accent),
+                ));
+            }
             if sl.is_heading {
                 if let Some(ref text) = sl.heading_text {
                     let indicator = if tab.folded_headings.contains(text) {
@@ -606,6 +614,95 @@ fn draw_filter_picker(f: &mut Frame, state: &AppState) {
     f.render_widget(Paragraph::new(hint), chunks[1]);
 }
 
+fn draw_toc(f: &mut Frame, state: &AppState) {
+    let theme = state.theme;
+    let area = f.area();
+    let entries = &state.toc_entries;
+
+    let max_text_width = entries.iter()
+        .map(|(text, _, level)| {
+            let indent = (*level as usize).saturating_sub(1) * 2;
+            indent + text.len() + 4
+        })
+        .max()
+        .unwrap_or(20);
+    let width = (max_text_width as u16 + 4).min(area.width.saturating_sub(4)).max(30);
+    let height = (entries.len() as u16 + 4).min(area.height.saturating_sub(4));
+    let popup = centered_rect(width, height, area);
+
+    f.render_widget(Clear, popup);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.accent))
+        .title(" Outline ")
+        .title_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD));
+
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let chunks = Layout::vertical([
+        Constraint::Min(1),
+        Constraint::Length(1),
+    ])
+    .split(inner);
+
+    let visible_height = chunks[0].height as usize;
+    // Adjust scroll to keep selected visible
+    let scroll = if state.toc_selected < state.toc_scroll {
+        state.toc_selected
+    } else if state.toc_selected >= state.toc_scroll + visible_height {
+        state.toc_selected.saturating_sub(visible_height - 1)
+    } else {
+        state.toc_scroll
+    };
+
+    let lines: Vec<Line> = entries
+        .iter()
+        .enumerate()
+        .skip(scroll)
+        .take(visible_height)
+        .map(|(i, (text, _, level))| {
+            let is_selected = i == state.toc_selected;
+            let indent = " ".repeat((*level as usize).saturating_sub(1) * 2);
+            let prefix = if is_selected { " > " } else { "   " };
+            let color = match level {
+                1 => theme.accent,
+                2 => theme.heading,
+                _ => theme.text_bright,
+            };
+            let style = if is_selected {
+                Style::default()
+                    .fg(color)
+                    .bg(theme.cursor_bg)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(color)
+            };
+            let mut line = Line::from(Span::styled(format!("{}{}{}", prefix, indent, text), style));
+            if is_selected {
+                let content_width: usize = line.spans.iter().map(|s| s.content.width()).sum();
+                let area_width = chunks[0].width as usize;
+                if content_width < area_width {
+                    line.spans.push(Span::styled(
+                        " ".repeat(area_width - content_width),
+                        Style::default().bg(theme.cursor_bg),
+                    ));
+                }
+            }
+            line
+        })
+        .collect();
+
+    f.render_widget(Paragraph::new(lines), chunks[0]);
+
+    let hint = Line::from(Span::styled(
+        " j/k:select  enter:jump  esc/o:cancel",
+        Style::default().fg(theme.text_muted),
+    ));
+    f.render_widget(Paragraph::new(hint), chunks[1]);
+}
+
 fn draw_help(f: &mut Frame, state: &AppState) {
     let theme = state.theme;
     let area = f.area();
@@ -623,6 +720,9 @@ fn draw_help(f: &mut Frame, state: &AppState) {
         ("Ctrl-n / p",   "Next / previous unchecked task"),
         ("u",            "Toggle unchecked task filter"),
         ("l",            "Filter by label"),
+        ("o",            "Outline / table of contents"),
+        ("m",            "Toggle bookmark"),
+        ("' / \"",       "Next / previous bookmark"),
         ("/",            "Search"),
         ("n / N",        "Next / previous match"),
         ("f",            "File picker"),

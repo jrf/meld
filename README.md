@@ -51,6 +51,9 @@ mdr <file.md>
 | `Ctrl-n` / `Ctrl-p` | Next / previous unchecked task |
 | `u` | Toggle unchecked task filter |
 | `l` | Filter by label |
+| `o` | Outline / table of contents |
+| `m` | Toggle bookmark |
+| `'` / `"` | Next / previous bookmark |
 | `/` | Search |
 | `n` / `N` | Next/previous match |
 | `f` | File picker (opens in new tab) |

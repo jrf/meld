@@ -185,6 +185,10 @@ fn main() -> io::Result<()> {
                                         tab.scroll = 0;
                                     }
                                     KeyCode::Char('l') => state.open_label_picker(),
+                                    KeyCode::Char('o') => state.open_toc(),
+                                    KeyCode::Char('m') => state.tab_mut().toggle_bookmark(),
+                                    KeyCode::Char('\'') => state.tab_mut().next_bookmark(),
+                                    KeyCode::Char('"') => state.tab_mut().prev_bookmark(),
                                     KeyCode::Char('t') => state.open_theme_picker(),
                                     KeyCode::Char('?') => state.open_help(),
                                     KeyCode::Char('/') => {
@@ -211,7 +215,39 @@ fn main() -> io::Result<()> {
                                             }
                                         }
                                     }
-                                    KeyCode::Enter => state.tab_mut().toggle_fold(),
+                                    KeyCode::Enter => {
+                                        // Try fold toggle first (headings)
+                                        let tab = state.tab();
+                                        let cursor_idx = tab.visible_line_indices()
+                                            .get(tab.cursor)
+                                            .copied();
+                                        let is_heading = cursor_idx
+                                            .and_then(|i| tab.cached_lines.get(i))
+                                            .map_or(false, |sl| sl.is_heading);
+                                        let link = cursor_idx
+                                            .and_then(|i| tab.cached_lines.get(i))
+                                            .and_then(|sl| sl.link_url.clone());
+
+                                        if is_heading {
+                                            state.tab_mut().toggle_fold();
+                                        } else if let Some(url) = link {
+                                            if url.ends_with(".md") || url.ends_with(".markdown") {
+                                                // Resolve relative to current file's directory
+                                                let base_dir = state.tab().file_path.as_ref()
+                                                    .and_then(|p| p.parent())
+                                                    .map(|p| p.to_path_buf())
+                                                    .unwrap_or_else(|| PathBuf::from("."));
+                                                let target = base_dir.join(&url);
+                                                if let Ok(canonical) = target.canonicalize() {
+                                                    if state.open_file(canonical).is_ok() {
+                                                        _watcher = rebuild_watcher(&state, file_dirty.clone());
+                                                    }
+                                                }
+                                            } else if url.starts_with("http://") || url.starts_with("https://") {
+                                                let _ = Command::new("open").arg(&url).status();
+                                            }
+                                        }
+                                    }
                                     KeyCode::Char('[') => state.tab_mut().fold_all(),
                                     KeyCode::Char(']') => state.tab_mut().unfold_all(),
                                     KeyCode::Char('x') | KeyCode::Char(' ') => {
@@ -221,22 +257,10 @@ fn main() -> io::Result<()> {
                                     KeyCode::BackTab => state.prev_tab(),
                                     KeyCode::Char('j') | KeyCode::Down => state.tab_mut().cursor_down(1),
                                     KeyCode::Char('k') | KeyCode::Up => state.tab_mut().cursor_up(1),
-                                    KeyCode::Char('f') if ctrl => {
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.tab_mut().cursor_down(h);
-                                    }
-                                    KeyCode::Char('b') if ctrl => {
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.tab_mut().cursor_up(h);
-                                    }
-                                    KeyCode::PageDown => {
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.tab_mut().cursor_down(h);
-                                    }
-                                    KeyCode::PageUp => {
-                                        let h = terminal.size()?.height.saturating_sub(6) as usize;
-                                        state.tab_mut().cursor_up(h);
-                                    }
+                                    KeyCode::Char('f') if ctrl => state.tab_mut().page_down(),
+                                    KeyCode::Char('b') if ctrl => state.tab_mut().page_up(),
+                                    KeyCode::PageDown => state.tab_mut().page_down(),
+                                    KeyCode::PageUp => state.tab_mut().page_up(),
                                     KeyCode::Home | KeyCode::Char('g') => state.tab_mut().cursor_top(),
                                     KeyCode::End | KeyCode::Char('G') => state.tab_mut().cursor_bottom(),
                                     _ => needs_redraw = false,
@@ -380,6 +404,34 @@ fn main() -> io::Result<()> {
                                     }
                                     KeyCode::Enter => state.label_picker_confirm(),
                                     KeyCode::Esc | KeyCode::Char('l') => state.label_picker_cancel(),
+                                    _ => needs_redraw = false,
+                                },
+                                AppMode::TableOfContents => match key.code {
+                                    KeyCode::Char('j') | KeyCode::Down => {
+                                        let len = state.toc_entries.len();
+                                        if len > 0 {
+                                            state.toc_selected = (state.toc_selected + 1) % len;
+                                        }
+                                    }
+                                    KeyCode::Char('k') | KeyCode::Up => {
+                                        let len = state.toc_entries.len();
+                                        if len > 0 {
+                                            state.toc_selected = if state.toc_selected == 0 {
+                                                len - 1
+                                            } else {
+                                                state.toc_selected - 1
+                                            };
+                                        }
+                                    }
+                                    KeyCode::Home => state.toc_selected = 0,
+                                    KeyCode::End => {
+                                        let len = state.toc_entries.len();
+                                        if len > 0 {
+                                            state.toc_selected = len - 1;
+                                        }
+                                    }
+                                    KeyCode::Enter => state.toc_confirm(),
+                                    KeyCode::Esc | KeyCode::Char('o') => state.toc_cancel(),
                                     _ => needs_redraw = false,
                                 },
                                 AppMode::Help => match key.code {

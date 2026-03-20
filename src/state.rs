@@ -15,6 +15,7 @@ pub enum AppMode {
     FilePicker,
     ThemePicker { original_index: usize },
     FilterPicker,
+    TableOfContents,
     Help,
 }
 
@@ -28,6 +29,8 @@ pub struct Tab {
     pub file_updated: bool,
     pub filter_tasks: bool,
     pub tag_filter: Option<String>,
+    pub bookmarks: Vec<usize>,
+    pub bookmark_current: usize,
     pub folded_headings: HashSet<String>,
     pub search_query: String,
     pub search_matches: Vec<usize>,
@@ -51,6 +54,8 @@ impl Tab {
             file_updated: false,
             filter_tasks: false,
             tag_filter: None,
+            bookmarks: Vec::new(),
+            bookmark_current: 0,
             folded_headings: HashSet::new(),
             search_query: String::new(),
             search_matches: Vec::new(),
@@ -74,6 +79,8 @@ impl Tab {
             file_updated: false,
             filter_tasks: false,
             tag_filter: None,
+            bookmarks: Vec::new(),
+            bookmark_current: 0,
             folded_headings: HashSet::new(),
             search_query: String::new(),
             search_matches: Vec::new(),
@@ -133,6 +140,19 @@ impl Tab {
         self.scroll = self.total_lines.saturating_sub(self.visible_height);
     }
 
+    pub fn page_down(&mut self) {
+        let max_scroll = self.total_lines.saturating_sub(self.visible_height);
+        self.scroll = self.scroll.saturating_add(self.visible_height).min(max_scroll);
+        self.cursor = self.scroll;
+    }
+
+    pub fn page_up(&mut self) {
+        self.scroll = self.scroll.saturating_sub(self.visible_height);
+        self.cursor = self.scroll + self.visible_height.saturating_sub(1);
+        let max = self.total_lines.saturating_sub(1);
+        self.cursor = self.cursor.min(max);
+    }
+
     pub fn scroll_viewport(&mut self, n: usize, down: bool) {
         let max_scroll = self.total_lines.saturating_sub(self.visible_height);
         if down {
@@ -147,7 +167,7 @@ impl Tab {
         }
     }
 
-    fn ensure_cursor_visible(&mut self) {
+    pub fn ensure_cursor_visible(&mut self) {
         if self.cursor < self.scroll {
             self.scroll = self.cursor;
         } else if self.cursor >= self.scroll + self.visible_height {
@@ -336,6 +356,47 @@ impl Tab {
         indices
     }
 
+    pub fn toggle_bookmark(&mut self) {
+        let pos = self.cursor;
+        if let Some(idx) = self.bookmarks.iter().position(|&b| b == pos) {
+            self.bookmarks.remove(idx);
+            if self.bookmark_current >= self.bookmarks.len() && self.bookmark_current > 0 {
+                self.bookmark_current = self.bookmarks.len() - 1;
+            }
+        } else {
+            self.bookmarks.push(pos);
+            self.bookmarks.sort();
+        }
+    }
+
+    pub fn next_bookmark(&mut self) {
+        if self.bookmarks.is_empty() {
+            return;
+        }
+        // Find next bookmark after cursor
+        if let Some(idx) = self.bookmarks.iter().position(|&b| b > self.cursor) {
+            self.bookmark_current = idx;
+        } else {
+            self.bookmark_current = 0; // wrap around
+        }
+        self.cursor = self.bookmarks[self.bookmark_current];
+        self.ensure_cursor_visible();
+    }
+
+    pub fn prev_bookmark(&mut self) {
+        if self.bookmarks.is_empty() {
+            return;
+        }
+        // Find previous bookmark before cursor
+        if let Some(idx) = self.bookmarks.iter().rposition(|&b| b < self.cursor) {
+            self.bookmark_current = idx;
+        } else {
+            self.bookmark_current = self.bookmarks.len() - 1; // wrap around
+        }
+        self.cursor = self.bookmarks[self.bookmark_current];
+        self.ensure_cursor_visible();
+    }
+
     /// Collect all unique tags from cached lines, sorted.
     pub fn collect_tags(&self) -> Vec<String> {
         let mut tags: Vec<String> = self.cached_lines.iter()
@@ -430,6 +491,9 @@ pub struct AppState {
     pub scrollbar: bool,
     pub filter_options: Vec<String>,
     pub filter_selected: usize,
+    pub toc_entries: Vec<(String, usize, u8)>, // (heading_text, line_index, level)
+    pub toc_selected: usize,
+    pub toc_scroll: usize,
 }
 
 impl AppState {
@@ -445,6 +509,9 @@ impl AppState {
             browser: BrowserState::new(dir),
             filter_options: Vec::new(),
             filter_selected: 0,
+            toc_entries: Vec::new(),
+            toc_selected: 0,
+            toc_scroll: 0,
             scrollbar,
         }
     }
@@ -465,6 +532,9 @@ impl AppState {
             browser: BrowserState::new(browser_dir),
             filter_options: Vec::new(),
             filter_selected: 0,
+            toc_entries: Vec::new(),
+            toc_selected: 0,
+            toc_scroll: 0,
             scrollbar,
         }
     }
@@ -523,6 +593,49 @@ impl AppState {
             if self.active_tab >= self.tabs.len() {
                 self.active_tab = self.tabs.len() - 1;
             }
+        }
+    }
+
+    pub fn open_toc(&mut self) {
+        let tab = &self.tabs[self.active_tab];
+        let indices = tab.visible_line_indices();
+        let mut entries = Vec::new();
+        for (display_idx, &line_idx) in indices.iter().enumerate() {
+            if let Some(sl) = tab.cached_lines.get(line_idx) {
+                if let (Some(level), Some(ref text)) = (sl.heading_level, &sl.heading_text) {
+                    entries.push((text.clone(), display_idx, level));
+                }
+            }
+        }
+        if entries.is_empty() {
+            return;
+        }
+        let cursor = tab.cursor;
+        let selected = entries.iter()
+            .rposition(|(_, idx, _)| *idx <= cursor)
+            .unwrap_or(0);
+        self.toc_entries = entries;
+        self.toc_selected = selected;
+        self.toc_scroll = 0;
+        self.mode = AppMode::TableOfContents;
+    }
+
+    pub fn toc_confirm(&mut self) {
+        if matches!(self.mode, AppMode::TableOfContents) {
+            let display_idx = self.toc_entries.get(self.toc_selected)
+                .map(|(_, idx, _)| *idx);
+            if let Some(idx) = display_idx {
+                let tab = self.tab_mut();
+                tab.cursor = idx;
+                tab.ensure_cursor_visible();
+            }
+            self.mode = AppMode::Reader;
+        }
+    }
+
+    pub fn toc_cancel(&mut self) {
+        if matches!(self.mode, AppMode::TableOfContents) {
+            self.mode = AppMode::Reader;
         }
     }
 
@@ -639,6 +752,7 @@ fn filter_task_lines(lines: Vec<StyledLine<'static>>) -> Vec<StyledLine<'static>
                     heading_text: None,
                     source_line: None,
                     tags: Vec::new(),
+                    link_url: None,
                 });
             }
             result.push(sl);
@@ -651,6 +765,7 @@ fn filter_task_lines(lines: Vec<StyledLine<'static>>) -> Vec<StyledLine<'static>
                 heading_text: None,
                 source_line: None,
                 tags: Vec::new(),
+                link_url: None,
             });
         } else if sl.source_line.is_some() {
             // Check the marker span (first span) for unchecked status
