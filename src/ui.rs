@@ -143,13 +143,13 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
     let chunks = if show_tabs {
         Layout::vertical([
             Constraint::Length(1), // tab bar
+            Constraint::Length(1), // spacer
             Constraint::Min(1),   // content
             Constraint::Length(1), // status bar
         ])
         .split(inner)
     } else {
         Layout::vertical([
-            Constraint::Length(0), // no tab bar
             Constraint::Min(1),   // content
             Constraint::Length(1), // status bar
         ])
@@ -162,7 +162,8 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
     }
 
     // Content area
-    let content_area = chunks[1];
+    let content_area = if show_tabs { chunks[2] } else { chunks[0] };
+    let status_area = if show_tabs { chunks[3] } else { chunks[1] };
     {
         let tab = state.tab_mut();
         let _parsed = tab.get_parsed_lines(content_area.width, theme);
@@ -268,7 +269,7 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
             ),
             Span::styled(match_info, Style::default().fg(theme.text_dim)),
         ]);
-        f.render_widget(Paragraph::new(status), chunks[2]);
+        f.render_widget(Paragraph::new(status), status_area);
     } else {
         let scroll_pct = if total_lines <= visible_height {
             100
@@ -321,7 +322,7 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
             status_spans.push(Span::styled(match_info, Style::default().fg(theme.text_dim)));
         }
 
-        f.render_widget(Paragraph::new(Line::from(status_spans)), chunks[2]);
+        f.render_widget(Paragraph::new(Line::from(status_spans)), status_area);
     }
 }
 
@@ -530,14 +531,14 @@ fn draw_help(f: &mut Frame, state: &AppState) {
         ("G / End",      "Go to bottom"),
         ("Enter",        "Fold/unfold section"),
         ("x / Space",    "Toggle task checkbox"),
-        ("Tab / S-Tab",  "Next / previous unchecked task"),
+        ("Ctrl-n / p",   "Next / previous unchecked task"),
         ("F",            "Toggle task filter view"),
         ("/",            "Search"),
         ("n / N",        "Next / previous match"),
         ("f",            "File picker"),
         ("e",            "Edit in $EDITOR"),
         ("t",            "Theme picker"),
-        ("H / L",        "Previous / next tab"),
+        ("Tab / S-Tab",  "Next / previous tab"),
         ("W",            "Close current tab"),
         ("?",            "Toggle help"),
         ("q / Ctrl-c",   "Quit"),

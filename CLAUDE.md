@@ -25,7 +25,7 @@ mdr is a terminal markdown reader built with Rust, ratatui, and crossterm. It re
 
 **Rendering pipeline**: `ui::draw` always renders the reader first, then overlays the active modal (file picker, theme picker, or help) on top. The reader calls `markdown::parse_markdown` which converts the full markdown source into a `Vec<StyledLine>` using pulldown-cmark. The UI then slices this by scroll offset and renders via ratatui. Parsed output is cached per-tab and only re-parsed when content, theme, or terminal width changes.
 
-**Tab system** (`state.rs`): Per-file state is stored in `Tab` structs (content, scroll, cursor, search, cache, folds). `AppState` holds a `Vec<Tab>` and `active_tab` index. `tab()`/`tab_mut()` accessors provide the active tab. The file picker opens files in new tabs (or switches to an existing tab if the file is already open). `H`/`L` switch tabs, `W` closes the current tab (minimum 1 tab). The file watcher watches all open tab file paths and updates whichever tab's file changed.
+**Tab system** (`state.rs`): Per-file state is stored in `Tab` structs (content, scroll, cursor, search, cache, folds). `AppState` holds a `Vec<Tab>` and `active_tab` index. `tab()`/`tab_mut()` accessors provide the active tab. The file picker opens files in new tabs (or switches to an existing tab if the file is already open). `Tab`/`Shift-Tab` switch tabs, `W` closes the current tab (minimum 1 tab). The file watcher watches all open tab file paths and updates whichever tab's file changed.
 
 **Key modules**:
 - `main.rs` — event loop, file watcher setup (watches all tab file paths), terminal init/cleanup, external editor launch.

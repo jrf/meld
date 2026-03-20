@@ -47,14 +47,14 @@ mdr <file.md>
 | `G` / `End` | Go to bottom |
 | `Enter` | Fold/unfold section |
 | `x` / `Space` | Toggle task checkbox |
-| `Tab` / `Shift-Tab` | Next / previous unchecked task |
+| `Ctrl-n` / `Ctrl-p` | Next / previous unchecked task |
 | `F` | Toggle task filter view |
 | `/` | Search |
 | `n` / `N` | Next/previous match |
 | `f` | File picker (opens in new tab) |
 | `t` | Cycle theme |
 | `e` | Open in `$EDITOR` |
-| `H` / `L` | Previous / next tab |
+| `Tab` / `Shift-Tab` | Next / previous tab |
 | `W` | Close current tab |
 | `?` | Help |
 | `q` / `Ctrl-c` | Quit |

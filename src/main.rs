@@ -178,6 +178,8 @@ fn main() -> io::Result<()> {
                                         state.tab_mut().open_search();
                                         state.mode = AppMode::Search;
                                     }
+                                    KeyCode::Char('n') if ctrl => state.tab_mut().next_task(),
+                                    KeyCode::Char('p') if ctrl => state.tab_mut().prev_task(),
                                     KeyCode::Char('n') => state.tab_mut().search_next(),
                                     KeyCode::Char('N') => state.tab_mut().search_prev(),
                                     KeyCode::Char('e') => {
@@ -200,8 +202,8 @@ fn main() -> io::Result<()> {
                                     KeyCode::Char('x') | KeyCode::Char(' ') => {
                                         state.tab_mut().toggle_checkbox();
                                     }
-                                    KeyCode::Tab => state.tab_mut().next_task(),
-                                    KeyCode::BackTab => state.tab_mut().prev_task(),
+                                    KeyCode::Tab => state.next_tab(),
+                                    KeyCode::BackTab => state.prev_tab(),
                                     KeyCode::Char('j') | KeyCode::Down => state.tab_mut().cursor_down(1),
                                     KeyCode::Char('k') | KeyCode::Up => state.tab_mut().cursor_up(1),
                                     KeyCode::Char('f') if ctrl => {
@@ -222,8 +224,6 @@ fn main() -> io::Result<()> {
                                     }
                                     KeyCode::Home | KeyCode::Char('g') => state.tab_mut().cursor_top(),
                                     KeyCode::End | KeyCode::Char('G') => state.tab_mut().cursor_bottom(),
-                                    KeyCode::Char('H') => state.prev_tab(),
-                                    KeyCode::Char('L') => state.next_tab(),
                                     KeyCode::Char('W') => state.close_tab(),
                                     _ => needs_redraw = false,
                                 },
