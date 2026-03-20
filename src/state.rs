@@ -263,6 +263,18 @@ impl Tab {
         }
     }
 
+    pub fn fold_all(&mut self) {
+        for sl in &self.cached_lines {
+            if let Some(ref text) = sl.heading_text {
+                self.folded_headings.insert(text.clone());
+            }
+        }
+    }
+
+    pub fn unfold_all(&mut self) {
+        self.folded_headings.clear();
+    }
+
     pub fn visible_line_indices(&self) -> Vec<usize> {
         if self.folded_headings.is_empty() {
             return (0..self.cached_lines.len()).collect();

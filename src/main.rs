@@ -206,6 +206,8 @@ fn main() -> io::Result<()> {
                                         }
                                     }
                                     KeyCode::Enter => state.tab_mut().toggle_fold(),
+                                    KeyCode::Char('[') => state.tab_mut().fold_all(),
+                                    KeyCode::Char(']') => state.tab_mut().unfold_all(),
                                     KeyCode::Char('x') | KeyCode::Char(' ') => {
                                         state.tab_mut().toggle_checkbox();
                                     }

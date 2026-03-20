@@ -529,6 +529,7 @@ fn draw_help(f: &mut Frame, state: &AppState) {
         ("g / Home",     "Go to top"),
         ("G / End",      "Go to bottom"),
         ("Enter",        "Fold/unfold section"),
+        ("[ / ]",        "Fold all / unfold all"),
         ("x / Space",    "Toggle task checkbox"),
         ("Ctrl-n / p",   "Next / previous unchecked task"),
         ("F",            "Toggle task filter view"),
