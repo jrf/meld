@@ -20,6 +20,7 @@
 
 ## Done
 
+- [x] Configurable themes via `config.toml` with serde/toml, per-theme category label colors
 - [x] Multiple file tabs — open several files, switch with `H`/`L`, close with `W`
 - [x] Use `unicode-width` for line length calculations
 - [x] Use actual visible height for `Ctrl-d`/`Ctrl-u` page size in reader mode

@@ -76,10 +76,12 @@ fn main() -> io::Result<()> {
     let file_arg = env::args().nth(1);
 
     let cfg = config::load_config();
+    let theme_configs = config::load_theme_configs();
+    let themes = theme::resolve_themes(&theme_configs);
     let initial_theme = cfg.theme.as_deref()
-        .and_then(|name| theme::find_theme(name))
+        .and_then(|name| theme::find_theme(&themes, name))
         .map(|(idx, _)| idx)
-        .unwrap_or(5);
+        .unwrap_or(0);
 
     let mut state = if let Some(ref arg) = file_arg {
         let file_path = PathBuf::from(arg).canonicalize().map_err(|e| {
@@ -87,10 +89,10 @@ fn main() -> io::Result<()> {
             e
         })?;
         let content = fs::read_to_string(&file_path)?;
-        AppState::new_reader(file_path, content, initial_theme, cfg.scrollbar)
+        AppState::new_reader(file_path, content, initial_theme, themes, cfg.scrollbar)
     } else {
         let dir = env::current_dir()?;
-        AppState::new_picker(dir, initial_theme, cfg.scrollbar)
+        AppState::new_picker(dir, initial_theme, themes, cfg.scrollbar)
     };
 
     // File change flag (set by watcher, cleared by main loop)
@@ -295,12 +297,12 @@ fn main() -> io::Result<()> {
                                 },
                                 AppMode::ThemePicker { .. } => match key.code {
                                     KeyCode::Char('j') | KeyCode::Down => {
-                                        let next = (state.theme_index + 1) % theme::ALL_THEMES.len();
+                                        let next = (state.theme_index + 1) % state.themes.len();
                                         state.theme_picker_select(next);
                                     }
                                     KeyCode::Char('k') | KeyCode::Up => {
                                         let next = if state.theme_index == 0 {
-                                            theme::ALL_THEMES.len() - 1
+                                            state.themes.len() - 1
                                         } else {
                                             state.theme_index - 1
                                         };

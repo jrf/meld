@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::browser::BrowserState;
 use crate::markdown::StyledLine;
-use crate::theme::{Theme, ALL_THEMES};
+use crate::theme::Theme;
 
 pub enum AppMode {
     Reader,
@@ -379,26 +379,28 @@ pub struct AppState {
     pub active_tab: usize,
     pub theme: Theme,
     pub theme_index: usize,
+    pub themes: Vec<(String, Theme)>,
     pub browser: BrowserState,
     pub scrollbar: bool,
 }
 
 impl AppState {
-    pub fn new_picker(dir: PathBuf, theme_index: usize, scrollbar: bool) -> Self {
-        let theme = ALL_THEMES[theme_index].1;
+    pub fn new_picker(dir: PathBuf, theme_index: usize, themes: Vec<(String, Theme)>, scrollbar: bool) -> Self {
+        let theme = themes[theme_index].1;
         Self {
             mode: AppMode::FilePicker,
             tabs: vec![Tab::empty(theme)],
             active_tab: 0,
             theme,
             theme_index,
+            themes,
             browser: BrowserState::new(dir),
             scrollbar,
         }
     }
 
-    pub fn new_reader(file_path: PathBuf, content: String, theme_index: usize, scrollbar: bool) -> Self {
-        let theme = ALL_THEMES[theme_index].1;
+    pub fn new_reader(file_path: PathBuf, content: String, theme_index: usize, themes: Vec<(String, Theme)>, scrollbar: bool) -> Self {
+        let theme = themes[theme_index].1;
         let browser_dir = file_path
             .parent()
             .map(|p| p.to_path_buf())
@@ -409,6 +411,7 @@ impl AppState {
             active_tab: 0,
             theme,
             theme_index,
+            themes,
             browser: BrowserState::new(browser_dir),
             scrollbar,
         }
@@ -491,13 +494,13 @@ impl AppState {
 
     pub fn theme_picker_select(&mut self, index: usize) {
         self.theme_index = index;
-        self.theme = ALL_THEMES[index].1;
+        self.theme = self.themes[index].1;
     }
 
     pub fn theme_picker_confirm(&mut self) {
         if matches!(self.mode, AppMode::ThemePicker { .. }) {
             let mut cfg = crate::config::load_config();
-            cfg.theme = Some(ALL_THEMES[self.theme_index].0.to_string());
+            cfg.theme = Some(self.themes[self.theme_index].0.clone());
             crate::config::save_config(&cfg);
             self.mode = AppMode::Reader;
         }
@@ -506,7 +509,7 @@ impl AppState {
     pub fn theme_picker_cancel(&mut self) {
         if let AppMode::ThemePicker { original_index } = self.mode {
             self.theme_index = original_index;
-            self.theme = ALL_THEMES[original_index].1;
+            self.theme = self.themes[original_index].1;
             self.mode = AppMode::Reader;
         }
     }

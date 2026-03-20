@@ -6,7 +6,6 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use crate::state::{AppMode, AppState};
-use crate::theme::ALL_THEMES;
 
 fn shorten_path(path: &str) -> String {
     if let Some(home) = std::env::var_os("HOME") {
@@ -459,7 +458,7 @@ fn draw_theme_picker(f: &mut Frame, state: &AppState) {
     let theme = state.theme;
     let area = f.area();
 
-    let height = ALL_THEMES.len() as u16 + 4;
+    let height = state.themes.len() as u16 + 4;
     let width = 38;
     let popup = centered_rect(width, height, area);
 
@@ -480,7 +479,7 @@ fn draw_theme_picker(f: &mut Frame, state: &AppState) {
     ])
     .split(inner);
 
-    let lines: Vec<Line> = ALL_THEMES
+    let lines: Vec<Line> = state.themes
         .iter()
         .enumerate()
         .map(|(i, (name, _))| {

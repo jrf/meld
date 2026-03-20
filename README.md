@@ -72,7 +72,50 @@ theme = "tokyo night moon"
 scrollbar = true
 ```
 
+Themes live in `~/.config/mdr/themes/` as individual `.toml` files. The theme name is derived from the filename (hyphens become spaces, e.g. `tokyo-night-moon.toml` → "tokyo night moon").
+
+Example theme file (`~/.config/mdr/themes/tokyo-night-moon.toml`):
+
+```toml
+[colors]
+bg = "#222436"
+bg_highlight = "#2f334d"
+fg = "#c8d3f5"
+fg_bright = "#d5dff5"
+comment = "#636da6"
+fg_gutter = "#3b4261"
+red = "#ff757f"
+yellow = "#ffc777"
+green = "#c3e88d"
+blue = "#82aaff"
+magenta = "#c099ff"
+
+[ui]
+border = "fg_gutter"
+accent = "magenta"
+text = "fg"
+text_bright = "fg_bright"
+text_dim = "comment"
+text_muted = "fg_gutter"
+heading = "blue"
+error = "red"
+cursor_bg = "bg_highlight"
+
+[labels]
+bugs = "red"
+features = "green"
+improvements = "magenta"
+refactor = "yellow"
+docs = "blue"
+chore = "comment"
+```
+
+- Each theme file has a `[colors]` palette (hex `#rrggbb`), a `[ui]` section mapping roles to palette names, and a `[labels]` section for category colors
+- All fields are optional — missing fields fall back to a hardcoded default
+- Add new themes by dropping a `.toml` file in the themes directory
+- Requires a truecolor-capable terminal
+
 ## Requirements
 
 - Rust (stable)
-- A terminal with 256-color support
+- A terminal with truecolor (24-bit) support
