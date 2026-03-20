@@ -365,6 +365,45 @@ impl Tab {
             return (0..self.cached_lines.len()).collect();
         }
 
+        // When tag filtering, pre-compute which lines belong to a group containing the tag.
+        // A "group" is consecutive non-blank, non-heading lines (e.g. a word-wrapped list item).
+        // If any line in a group has the tag, all lines in that group should be visible.
+        let tagged_group = if let Some(ref tag) = self.tag_filter {
+            let mut membership = vec![false; self.cached_lines.len()];
+            let mut group_start: Option<usize> = None;
+            let mut group_has_tag = false;
+
+            for (i, sl) in self.cached_lines.iter().enumerate() {
+                if sl.is_blank || sl.heading_level.is_some() {
+                    if let Some(start) = group_start.take() {
+                        if group_has_tag {
+                            for j in start..i {
+                                membership[j] = true;
+                            }
+                        }
+                        group_has_tag = false;
+                    }
+                } else {
+                    if group_start.is_none() {
+                        group_start = Some(i);
+                    }
+                    if sl.tags.contains(tag) {
+                        group_has_tag = true;
+                    }
+                }
+            }
+            if let Some(start) = group_start.take() {
+                if group_has_tag {
+                    for j in start..self.cached_lines.len() {
+                        membership[j] = true;
+                    }
+                }
+            }
+            membership
+        } else {
+            Vec::new()
+        };
+
         let mut indices = Vec::new();
         let mut current_heading_folded = false;
         let mut kept_blank_after_fold = false;
@@ -381,14 +420,15 @@ impl Tab {
                     indices.push(i);
                     kept_blank_after_fold = true;
                 }
-            } else if let Some(ref tag) = self.tag_filter {
-                // Tag filter active — only show lines that have the tag, or blanks for spacing
-                if sl.tags.contains(tag) {
+            } else if self.tag_filter.is_some() {
+                // Tag filter active — show lines belonging to a tagged group, or blanks for spacing
+                if tagged_group.get(i).copied().unwrap_or(false) {
                     indices.push(i);
                 } else if sl.is_blank {
-                    // Keep blanks only if the previous visible line was a tagged line
+                    // Keep blanks only if the previous visible line was in a tagged group or a heading
                     if indices.last().map_or(false, |&prev| {
-                        self.cached_lines.get(prev).map_or(false, |p| !p.tags.is_empty() || p.is_heading)
+                        tagged_group.get(prev).copied().unwrap_or(false)
+                            || self.cached_lines.get(prev).map_or(false, |p| p.is_heading)
                     }) {
                         indices.push(i);
                     }
