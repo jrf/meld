@@ -202,14 +202,12 @@ fn draw_reader(f: &mut Frame, state: &mut AppState) {
             let sl = &tab.cached_lines[line_idx];
             let is_bookmarked = tab.bookmarks.contains(&(scroll + i));
 
-            if sl.is_heading {
-                if let Some(ref text) = sl.heading_text {
-                    let indicator = if tab.folded_headings.contains(text) { "▶" } else { "▼" };
-                    return Line::from(Span::styled(
-                        format!("{} ", indicator),
-                        Style::default().fg(theme.text_dim),
-                    ));
-                }
+            if sl.is_heading && sl.heading_text.is_some() {
+                let indicator = if tab.folded_headings.contains(&line_idx) { "▶" } else { "▼" };
+                return Line::from(Span::styled(
+                    format!("{} ", indicator),
+                    Style::default().fg(theme.text_dim),
+                ));
             }
             if is_bookmarked {
                 return Line::from(Span::styled(

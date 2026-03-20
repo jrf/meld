@@ -89,7 +89,7 @@ pub struct Tab {
     pub tag_filter: Option<String>,
     pub bookmarks: Vec<usize>,
     pub bookmark_current: usize,
-    pub folded_headings: HashSet<String>,
+    pub folded_headings: HashSet<usize>,
     pub search_query: String,
     pub search_matches: Vec<usize>,
     pub search_current: usize,
@@ -336,9 +336,9 @@ impl Tab {
     pub fn toggle_fold(&mut self) {
         if let Some(idx) = self.cursor_line_idx() {
             if let Some(sl) = self.cached_lines.get(idx) {
-                if let Some(ref text) = sl.heading_text {
-                    if !self.folded_headings.remove(text) {
-                        self.folded_headings.insert(text.clone());
+                if sl.heading_text.is_some() {
+                    if !self.folded_headings.remove(&idx) {
+                        self.folded_headings.insert(idx);
                     }
                 }
             }
@@ -346,11 +346,9 @@ impl Tab {
     }
 
     pub fn fold_all(&mut self) {
-        for sl in &self.cached_lines {
-            if sl.heading_level.is_some() {
-                if let Some(ref text) = sl.heading_text {
-                    self.folded_headings.insert(text.clone());
-                }
+        for (i, sl) in self.cached_lines.iter().enumerate() {
+            if sl.heading_level.is_some() && sl.heading_text.is_some() {
+                self.folded_headings.insert(i);
             }
         }
     }
@@ -375,8 +373,8 @@ impl Tab {
             if sl.heading_level.is_some() {
                 // Headings are always shown
                 indices.push(i);
-                current_heading_folded = sl.heading_text.as_ref()
-                    .map_or(false, |text| self.folded_headings.contains(text));
+                current_heading_folded = sl.heading_text.is_some()
+                    && self.folded_headings.contains(&i);
                 kept_blank_after_fold = false;
             } else if current_heading_folded {
                 if sl.is_blank && !kept_blank_after_fold {
