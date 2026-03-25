@@ -107,7 +107,7 @@ fn draw_tab_bar(f: &mut Frame, state: &AppState, area: Rect) {
             .as_ref()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "untitled".to_string());
+            .unwrap_or_else(|| "[stdin]".to_string());
 
         if i == state.active_tab {
             spans.push(Span::styled(

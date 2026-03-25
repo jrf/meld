@@ -32,7 +32,9 @@ cp target/release/mdr ~/.local/bin/
 ## Usage
 
 ```
-mdr <file.md>
+mdr <file.md>           # open a file
+mdr                     # open file picker
+cat file.md | mdr       # read from stdin
 ```
 
 ### Keybindings

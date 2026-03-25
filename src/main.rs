@@ -8,7 +8,7 @@ mod ui;
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::io;
+use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -74,6 +74,7 @@ fn rebuild_watcher(state: &AppState, flag: Arc<AtomicBool>) -> Option<Recommende
 
 fn main() -> io::Result<()> {
     let file_arg = env::args().nth(1);
+    let stdin_is_pipe = !io::stdin().is_terminal();
 
     let cfg = config::load_config();
     let theme_configs = config::load_theme_configs();
@@ -83,7 +84,11 @@ fn main() -> io::Result<()> {
         .map(|(idx, _)| idx)
         .unwrap_or(0);
 
-    let mut state = if let Some(ref arg) = file_arg {
+    let mut state = if stdin_is_pipe {
+        let mut content = String::new();
+        io::stdin().read_to_string(&mut content)?;
+        AppState::new_stdin(content, initial_theme, themes, cfg.scrollbar)
+    } else if let Some(ref arg) = file_arg {
         let file_path = PathBuf::from(arg).canonicalize().map_err(|e| {
             eprintln!("error: {}: {}", arg, e);
             e

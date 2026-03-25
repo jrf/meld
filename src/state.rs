@@ -126,6 +126,31 @@ impl Tab {
         }
     }
 
+    pub fn new_stdin(content: String, theme: Theme) -> Self {
+        Self {
+            content,
+            file_path: None,
+            scroll: 0,
+            cursor: 0,
+            total_lines: 0,
+            visible_height: 0,
+            file_updated: false,
+            filter_tasks: false,
+            tag_filter: None,
+            bookmarks: Vec::new(),
+            bookmark_current: 0,
+            folded_headings: HashSet::new(),
+            search_query: String::new(),
+            search_matches: Vec::new(),
+            search_current: 0,
+            cached_lines: Vec::new(),
+            cache_content_hash: 0,
+            cache_theme: theme,
+            cache_width: 0,
+            cache_filter: false,
+        }
+    }
+
     fn empty(theme: Theme) -> Self {
         Self {
             content: String::new(),
@@ -626,6 +651,21 @@ impl AppState {
             theme_index,
             themes,
             browser: BrowserState::new(browser_dir),
+            scrollbar,
+        }
+    }
+
+    pub fn new_stdin(content: String, theme_index: usize, themes: Vec<(String, Theme)>, scrollbar: bool) -> Self {
+        let theme = themes[theme_index].1;
+        let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self {
+            mode: AppMode::Reader,
+            tabs: vec![Tab::new_stdin(content, theme)],
+            active_tab: 0,
+            theme,
+            theme_index,
+            themes,
+            browser: BrowserState::new(dir),
             scrollbar,
         }
     }
