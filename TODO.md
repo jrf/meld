@@ -4,7 +4,7 @@
 
 ## Next
 
-- [ ] Task summary in status bar (e.g., `3/7 tasks`) #feature
+- [x] Task summary in status bar (e.g., `3/7 tasks`) #feature
 - [ ] Browser preview pane (split layout showing selected file) #improvement
 - [ ] Inline image rendering via Sixel (with fallback to `[image: alt text]` placeholder) #feature
 - [ ] Footnote rendering #feature

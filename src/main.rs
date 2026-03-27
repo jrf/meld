@@ -349,6 +349,16 @@ fn main() -> io::Result<()> {
                                         state.browser.selected = 0;
                                         state.browser.scroll_offset = 0;
                                     }
+                                    KeyCode::Char('j') if ctrl => {
+                                        state.browser.select_down();
+                                        let h = (terminal.size()?.height as usize * 3 / 4).saturating_sub(4);
+                                        state.browser.adjust_scroll(h);
+                                    }
+                                    KeyCode::Char('k') if ctrl => {
+                                        state.browser.select_up();
+                                        let h = (terminal.size()?.height as usize * 3 / 4).saturating_sub(4);
+                                        state.browser.adjust_scroll(h);
+                                    }
                                     KeyCode::Char(c) => {
                                         state.browser.filter.push(c);
                                         state.browser.rebuild_filter();
