@@ -174,6 +174,11 @@ impl BrowserState {
         self.scroll_offset = 0;
     }
 
+    /// Whether recursive file collection is still in progress.
+    pub fn recursive_loading(&self) -> bool {
+        self.recursive_rx.is_some()
+    }
+
     /// Kick off background collection of recursive .md files.
     pub fn preload_recursive(&mut self) {
         if self.recursive_loaded || self.recursive_rx.is_some() {

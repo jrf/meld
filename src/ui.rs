@@ -485,8 +485,13 @@ fn draw_file_picker(f: &mut Frame, state: &AppState) {
         f,
     );
 
+    let hint_text = if state.browser.recursive_loading() {
+        " enter:open  esc:close  (loading...)"
+    } else {
+        " enter:open  esc:close"
+    };
     let hint = Line::from(Span::styled(
-        " enter:open  esc:close",
+        hint_text,
         Style::default().fg(theme.text_muted),
     ));
     f.render_widget(Paragraph::new(hint), chunks[2]);

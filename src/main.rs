@@ -97,7 +97,9 @@ fn main() -> io::Result<()> {
         AppState::new_reader(file_path, content, initial_theme, themes, cfg.scrollbar)
     } else {
         let dir = env::current_dir()?;
-        AppState::new_picker(dir, initial_theme, themes, cfg.scrollbar)
+        let mut s = AppState::new_picker(dir, initial_theme, themes, cfg.scrollbar);
+        s.browser.preload_recursive();
+        s
     };
 
     // File change flag (set by watcher, cleared by main loop)
